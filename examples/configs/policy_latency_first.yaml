@@ -1,0 +1,18 @@
+name: latency-first
+description: "Optimise for lowest TTFT and E2E — ignore cost"
+preset: latency-first
+
+slo_ttft_ms: 300
+slo_itl_ms: 30
+slo_e2e_ms: 3000
+
+max_queue_depth: 50
+max_error_rate: 0.05
+
+rules:
+  - name: always-premium-gpu
+    priority: 10
+    conditions:
+      priority_tier: "standard"
+    actions:
+      set_budget_sensitivity: 0.0

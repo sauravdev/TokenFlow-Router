@@ -1,0 +1,76 @@
+[
+  {
+    "description": "Short interactive chat — expect economy/standard lane",
+    "headers": {
+      "x-tenant-id": "tenant-startup-free",
+      "x-priority-tier": "standard"
+    },
+    "body": {
+      "model": "meta/llama-3.1-8b-instruct",
+      "messages": [{"role": "user", "content": "What is the capital of France?"}],
+      "max_tokens": 64,
+      "stream": false
+    }
+  },
+  {
+    "description": "Premium reasoning request — expect H100/A100 lane",
+    "headers": {
+      "x-tenant-id": "tenant-premium-corp",
+      "x-priority-tier": "premium"
+    },
+    "body": {
+      "model": "meta/llama-3.1-70b-instruct",
+      "messages": [
+        {"role": "system", "content": "You are an expert financial analyst."},
+        {"role": "user", "content": "Analyse the risk profile of a leveraged buyout with a 5x debt-to-EBITDA ratio in a rising rate environment. Provide a detailed multi-step assessment."}
+      ],
+      "max_tokens": 2048,
+      "stream": true
+    }
+  },
+  {
+    "description": "Large summarisation — prefill-heavy, expect TTFT-optimised lane",
+    "headers": {
+      "x-tenant-id": "default",
+      "x-priority-tier": "standard"
+    },
+    "body": {
+      "model": "meta/llama-3.1-70b-instruct",
+      "messages": [
+        {"role": "user", "content": "Summarise the following document in 3 bullet points: [... 15,000 token document would go here ...]"}
+      ],
+      "max_tokens": 300,
+      "stream": false
+    }
+  },
+  {
+    "description": "Long decode / story generation — decode-heavy, expect ITL-optimised lane",
+    "headers": {
+      "x-tenant-id": "default",
+      "x-priority-tier": "standard"
+    },
+    "body": {
+      "model": "meta/llama-3.1-8b-instruct",
+      "messages": [
+        {"role": "user", "content": "Write a detailed 2000-word short story about an AI system that learns to route network packets."}
+      ],
+      "max_tokens": 2000,
+      "stream": true
+    }
+  },
+  {
+    "description": "Batch job — expect economy lane, cost-optimised",
+    "headers": {
+      "x-tenant-id": "tenant-batch-jobs",
+      "x-priority-tier": "batch"
+    },
+    "body": {
+      "model": "meta/llama-3.1-8b-instruct",
+      "messages": [
+        {"role": "user", "content": "Classify the sentiment of this product review: 'The product arrived damaged and customer service was unhelpful.'"}
+      ],
+      "max_tokens": 16,
+      "stream": false
+    }
+  }
+]

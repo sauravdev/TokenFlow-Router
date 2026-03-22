@@ -1,0 +1,25 @@
+name: cost-first
+description: "Minimise cost — use economy lanes unless SLO is at risk"
+preset: cost-first
+
+slo_ttft_ms: 2000
+slo_itl_ms: 100
+slo_e2e_ms: 30000
+
+max_queue_depth: 200
+max_error_rate: 0.15
+
+rules:
+  - name: premium-only-for-premium-tier
+    priority: 10
+    conditions:
+      priority_tier: "premium"
+    actions:
+      set_budget_sensitivity: 0.0
+
+  - name: batch-max-economy
+    priority: 20
+    conditions:
+      priority_tier: "batch"
+    actions:
+      set_budget_sensitivity: 1.0

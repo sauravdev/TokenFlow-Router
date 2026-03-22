@@ -1,0 +1,91 @@
+# TokenFlow Router — example policy configuration
+# Copy this to your deployment and customise as needed.
+
+name: production-balanced
+description: "Balanced policy for heterogeneous GPU fleet"
+preset: balanced   # latency-first | balanced | cost-first
+
+# Global utility function weights (must sum to ~1.0)
+slo_weight: 0.30
+cost_weight: 0.20
+queue_weight: 0.15
+gpu_affinity_weight: 0.15
+model_fit_weight: 0.10
+reliability_weight: 0.10
+
+# SLO targets (milliseconds)
+slo_ttft_ms: 500
+slo_itl_ms: 50
+slo_e2e_ms: 5000
+
+# Hard limits
+max_queue_depth: 100
+min_health_score: 0.5
+max_error_rate: 0.10
+
+# DSL rules — evaluated in priority order (lower number = first)
+rules:
+  - name: premium-traffic-on-h100
+    description: "Route premium tier requests to premium GPU lanes"
+    priority: 10
+    conditions:
+      priority_tier: "premium"
+    actions:
+      set_budget_sensitivity: 0.0   # ignore cost for premium
+
+  - name: batch-to-economy-lane
+    description: "Force batch traffic to economy GPU lanes"
+    priority: 20
+    conditions:
+      priority_tier: "batch"
+    actions:
+      set_budget_sensitivity: 1.0   # maximise cost savings
+
+  - name: large-prompt-boost-slo
+    description: "Large prompts get SLO-first routing (prefill-heavy = TTFT matters)"
+    priority: 30
+    conditions:
+      input_tokens_gt: 8000
+      priority_tier: "standard"
+    actions:
+      set_latency_class: "interactive"
+
+  - name: decode-heavy-standard-cost
+    description: "Long decode workloads prefer mid-tier GPUs (no need for H100)"
+    priority: 40
+    conditions:
+      output_tokens_gt: 1500
+      priority_tier: "standard"
+    actions:
+      set_budget_sensitivity: 0.7
+
+  - name: throttle-burst-traffic
+    description: "Under burst conditions, demote non-premium to batch"
+    priority: 50
+    conditions:
+      burst_class: "burst"
+      priority_tier: "standard"
+    actions:
+      set_priority: "batch"
+      set_budget_sensitivity: 0.8
+
+# Per-tenant policies
+tenant_policies:
+  tenant-premium-corp:
+    allowed_gpu_classes: [H100, A100, L40S]
+    max_rpm: 500
+    budget_usd_per_hour: 50.0
+    priority_tier_override: premium
+
+  tenant-startup-free:
+    allowed_gpu_classes: [L4, A10G, L40S]
+    max_rpm: 30
+    budget_usd_per_hour: 2.0
+    cost_weight_override: 0.9
+
+  tenant-batch-jobs:
+    allowed_gpu_classes: [L4, A10G, L40S, L40]
+    max_rpm: 200
+    budget_usd_per_hour: 10.0
+    priority_tier_override: batch
+    cost_weight_override: 1.0
