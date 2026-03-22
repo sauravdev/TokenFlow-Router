@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  tokenflow:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./examples/configs:/app/configs:ro
+    environment:
+      - TOKENFLOW_HOST=0.0.0.0
+      - TOKENFLOW_PORT=8080
+      - TOKENFLOW_POLICY_FILE=/app/configs/policy.yaml
+      - TOKENFLOW_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional: mock NIM endpoints for local testing
+  nim-mock-1:
+    image: python:3.11-slim
+    command: >
+      python -c "
+      import json, time
+      from http.server import HTTPServer, BaseHTTPRequestHandler
+      class H(BaseHTTPRequestHandler):
+          def do_POST(self):
+              length = int(self.headers.get('Content-Length', 0))
+              body = json.loads(self.rfile.read(length))
+              resp = {'id':'mock-1','object':'chat.completion','model':body.get('model','mock'),'choices':[{'index':0,'message':{'role':'assistant','content':'Mock response from NIM-1 (H100)'},'finish_reason':'stop'}],'usage':{'prompt_tokens':50,'completion_tokens':30,'total_tokens':80}}
+              self.send_response(200)
+              self.send_header('Content-Type','application/json')
+              self.end_headers()
+              self.wfile.write(json.dumps(resp).encode())
+          def log_message(self, *a): pass
+      HTTPServer(('0.0.0.0', 8001), H).serve_forever()
+      "
+    ports:
+      - "8001:8001"
+
+  nim-mock-2:
+    image: python:3.11-slim
+    command: >
+      python -c "
+      import json, time
+      from http.server import HTTPServer, BaseHTTPRequestHandler
+      class H(BaseHTTPRequestHandler):
+          def do_POST(self):
+              length = int(self.headers.get('Content-Length', 0))
+              body = json.loads(self.rfile.read(length))
+              resp = {'id':'mock-2','object':'chat.completion','model':body.get('model','mock'),'choices':[{'index':0,'message':{'role':'assistant','content':'Mock response from NIM-2 (L40S)'},'finish_reason':'stop'}],'usage':{'prompt_tokens':50,'completion_tokens':30,'total_tokens':80}}
+              self.send_response(200)
+              self.send_header('Content-Type','application/json')
+              self.end_headers()
+              self.wfile.write(json.dumps(resp).encode())
+          def log_message(self, *a): pass
+      HTTPServer(('0.0.0.0', 8002), H).serve_forever()
+      "
+    ports:
+      - "8002:8002"
