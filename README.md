@@ -2,7 +2,7 @@
 
 > **Route every token to the right GPU lane.**
 
-TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple NVIDIA NIM deployments and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
+TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -19,16 +19,16 @@ TokenFlow Router is an open-source, request-aware policy router that sits in fro
 │  │  (token     │  │  (tenant     │  │  Utility(e) =      │  │
 │  │   shape,    │  │   rules,     │  │  SLO + Cost +      │  │
 │  │   workload  │  │   budget,    │  │  Queue + GPU +     │  │
-│  │   type)     │  │   RPM caps)  │  │  Model + Reliability│  │
+│  │   type)     │  │   RPM caps)  │  │  Backend Affinity  │  │
 │  └─────────────┘  └──────────────┘  └────────────────────┘  │
-└──────────┬───────────────┬───────────────────┬───────────────┘
-           │               │                   │
-           ▼               ▼                   ▼
-    ┌─────────────┐ ┌─────────────┐   ┌─────────────┐
-    │  NIM (H100) │ │  NIM (L40S) │   │   NIM (L4)  │
-    │  Premium    │ │  Standard   │   │   Economy   │
-    │  Reasoning  │ │  General    │   │   Batch     │
-    └─────────────┘ └─────────────┘   └─────────────┘
+└──────┬───────────────┬──────────────────┬────────────────────┘
+       │               │                  │
+       ▼               ▼                  ▼
+┌─────────────┐ ┌─────────────┐   ┌──────────────────────────┐
+│  NIM (B200) │ │ vLLM (H200) │   │   SGLang / Dynamo        │
+│  Reasoning  │ │Decode-heavy │   │   Prefill / Disaggregated│
+│  Premium    │ │  Standard   │   │   Economy / Research     │
+└─────────────┘ └─────────────┘   └──────────────────────────┘
 ```
 
 ## What it does
@@ -44,11 +44,14 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 - `Cost per request` across heterogeneous GPU pools
 - Business policy: per-tenant budgets, SLO tiers, GPU affinity rules
 
-**It is complementary to:**
-- **NIM** — which handles model serving, lifecycle, and optimised inference runtimes
-- **Dynamo** — which handles worker-level KV-aware routing within a deployment
+**Supported backends:**
 
-TokenFlow Router sits *above* both.
+| Backend | Strengths | Telemetry source |
+|---|---|---|
+| **NIM** (TensorRT-LLM) | Reasoning, premium SLO | `/metrics` (`nim:` prefix) |
+| **vLLM** (PagedAttention) | Decode-heavy, high throughput | `/metrics` (`vllm:` prefix) |
+| **SGLang** (RadixAttention) | Prefill-heavy, KV cache reuse | `/get_server_info` |
+| **Dynamo** (disaggregated) | Both prefill + decode, KV transfer | `/metrics` (`vllm:` + `dynamo:` prefix) |
 
 ---
 
@@ -69,28 +72,57 @@ TokenFlow Router sits *above* both.
    - Budget caps → maximise cost savings
    - Priority overrides
    - DSL rule matching
-4. Decision engine scores every candidate endpoint:
+4. Hard constraints filter incompatible endpoints:
+   - CPU endpoints: only for BATCH / OFFLINE workloads
+   - RTX_LAPTOP: rejected if total tokens > 4096
+5. Decision engine scores every candidate endpoint:
    Utility(e) = w_slo * SLOScore(e)
               + w_cost * CostScore(e)
               + w_queue * QueueScore(e)
-              + w_gpu * GPUAffinityScore(e)
+              + w_gpu * GPUAffinityScore(e)   ← GPU tier × backend affinity × KV-warm bonus
               + w_model * ModelFitScore(e)
               + w_reliability * ReliabilityScore(e)
-5. Hard constraints filter out incompatible endpoints
 6. Best-scoring endpoint is selected
-7. Request is proxied to NIM endpoint
+7. Request is proxied to the winning endpoint
 8. TTFT and E2E latency are measured and recorded
 9. Routing decision is stored for /explain API
 ```
 
 ### Workload classification
 
-| Workload | Signal | Priority metric | Best GPU lane |
+| Workload | Signal | Priority metric | Best backend |
 |---|---|---|---|
-| `prefill_heavy` | input/output > 3 | TTFT | Strongest prefill GPU |
-| `decode_heavy` | output/input > 3 | ITL | Decode-efficient pool |
-| `balanced` | moderate both | E2E + cost | Mid-range GPU |
-| `reasoning` | model name hint | E2E reliability | Premium GPU |
+| `prefill_heavy` | input/output > 3 | TTFT | SGLang (RadixAttention KV reuse) |
+| `decode_heavy` | output/input > 3 | ITL | vLLM (PagedAttention) |
+| `balanced` | moderate both | E2E + cost | Dynamo or vLLM |
+| `reasoning` | model name hint | E2E reliability | NIM (TensorRT-LLM) |
+
+### GPU tier hierarchy
+
+| Tier | GPU class | VRAM | Typical use |
+|---|---|---|---|
+| 8 | **B200** | 192 GB HBM3e | Highest compute, Blackwell |
+| 7 | **H200** | 141 GB HBM3e | Best memory bandwidth for decode |
+| 6 | H100 | 80 GB HBM3 | General premium workloads |
+| 5 | A100 | 80/40 GB HBM2e | Established premium pool |
+| 4 | L40S | 48 GB GDDR6 | Standard inference |
+| 3 | L40, **RTX Pro 6000** | 48 GB / 96 GB GDDR7 | 70B models on GDDR7 |
+| 2 | A10G, L4, RTX 4090 | 24–24 GB | Economy inference |
+| 1 | **RTX Laptop**, RTX 3090 | 8–16 GB | Edge / small models (≤4096 tokens) |
+| 0 | **CPU** | — | Offline / batch tiny models only |
+
+### Backend affinity scoring
+
+Each backend gets a workload-type affinity multiplier applied to the GPU tier score:
+
+| Backend | reasoning | prefill_heavy | balanced | decode_heavy |
+|---|---|---|---|---|
+| NIM | **1.00** | 0.90 | 0.80 | 0.70 |
+| vLLM | 0.75 | 0.70 | 0.85 | **1.00** |
+| SGLang | 0.70 | **1.00** | 0.85 | 0.75 |
+| Dynamo | 0.85 | **0.95** | 0.90 | **0.95** |
+
+**KV-cache warm bonus:** SGLang `cache_hit_rate` and Dynamo `kv_hit_rate` provide up to +0.15 bonus on `GPUAffinityScore` for prefill-heavy requests.
 
 ---
 
@@ -102,21 +134,50 @@ TokenFlow Router sits *above* both.
 git clone https://github.com/sauravdev/TokenFlow-Router
 cd TokenFlow-Router
 
-# Start router + mock NIM endpoints
+# Start router + mock endpoints
 docker-compose up -d
 
-# Register your NIM endpoints
+# Register a NIM endpoint
 curl -X POST http://localhost:8080/admin/endpoints \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "nim-h100-llama3-70b",
+    "name": "nim-b200-llama3-70b",
     "nim_url": "http://your-nim-host:8000",
     "model_name": "meta/llama-3.1-70b-instruct",
-    "gpu_name": "H100",
+    "gpu_name": "B200",
+    "backend_type": "nim",
     "cost_class": "premium",
-    "cost_per_gpu_hour": 8.0,
-    "max_context_tokens": 32768,
+    "cost_per_gpu_hour": 12.0,
+    "max_context_tokens": 131072,
     "supports_reasoning": true
+  }'
+
+# Register a vLLM endpoint
+curl -X POST http://localhost:8080/admin/endpoints \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "vllm-h200-llama3-70b",
+    "nim_url": "http://your-vllm-host:8000",
+    "model_name": "meta/llama-3.1-70b-instruct",
+    "gpu_name": "H200",
+    "backend_type": "vllm",
+    "cost_class": "premium",
+    "cost_per_gpu_hour": 10.0,
+    "max_context_tokens": 131072
+  }'
+
+# Register an SGLang endpoint
+curl -X POST http://localhost:8080/admin/endpoints \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "sglang-h100-llama3-8b",
+    "nim_url": "http://your-sglang-host:30000",
+    "model_name": "meta/llama-3.1-8b-instruct",
+    "gpu_name": "H100",
+    "backend_type": "sglang",
+    "cost_class": "standard",
+    "cost_per_gpu_hour": 6.0,
+    "max_context_tokens": 32768
   }'
 
 # Send an inference request (OpenAI-compatible)
@@ -151,12 +212,13 @@ uvicorn tokenflow.main:app --host 0.0.0.0 --port 8080
 # Start the server
 tokenflow serve --port 8080 --policy-file examples/configs/policy.yaml
 
-# Register an endpoint
+# Register an endpoint (any backend)
 tokenflow register \
-  --name nim-h100 \
-  --url http://nim-host:8000 \
+  --name vllm-h200 \
+  --url http://vllm-host:8000 \
   --model meta/llama-3.1-8b-instruct \
-  --gpu H100 \
+  --gpu H200 \
+  --backend vllm \
   --cost-class premium
 
 # List endpoints
@@ -168,7 +230,7 @@ tokenflow policy preset latency-first   # or: balanced, cost-first
 # Explain a routing decision
 tokenflow explain <request-id>
 
-# Run a simulation (no real NIM needed)
+# Run a simulation (no real endpoints needed)
 tokenflow simulate --preset balanced --requests 200
 ```
 
@@ -195,7 +257,7 @@ All admin endpoints are under `/admin/...`.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/admin/endpoints` | Register a NIM endpoint |
+| `POST` | `/admin/endpoints` | Register an endpoint (NIM/vLLM/SGLang/Dynamo) |
 | `GET` | `/admin/endpoints` | List all endpoints |
 | `GET` | `/admin/endpoints/{id}` | Get one endpoint |
 | `DELETE` | `/admin/endpoints/{id}` | Delete endpoint |
@@ -221,8 +283,9 @@ curl http://localhost:8080/admin/routes/explain/<request-id>
 
 Response includes:
 - Selected endpoint and why
-- All candidate scores (SLO, cost, queue, GPU affinity, reliability)
+- All candidate scores (SLO, cost, queue, GPU affinity, backend affinity, reliability)
 - Hard-rejected endpoints and rejection reasons
+- KV-cache warm bonus applied (SGLang / Dynamo)
 - Predicted vs actual TTFT/E2E
 - Policy rules applied
 
@@ -251,12 +314,26 @@ slo_e2e_ms: 5000
 
 # DSL rules
 rules:
-  - name: premium-on-h100
-    priority: 10
+  - name: reasoning-to-nim
+    priority: 5
     conditions:
-      priority_tier: "premium"
+      workload_type: "reasoning"
     actions:
-      set_budget_sensitivity: 0.0
+      preferred_backend: "nim"
+
+  - name: prefill-to-sglang
+    priority: 6
+    conditions:
+      workload_type: "prefill_heavy"
+    actions:
+      preferred_backend: "sglang"
+
+  - name: cpu-offline-only
+    priority: 1
+    conditions:
+      gpu_class: "CPU"
+    actions:
+      allowed_priority_tiers: ["batch", "offline"]
 
   - name: throttle-burst
     priority: 20
@@ -269,10 +346,20 @@ rules:
 # Per-tenant policies
 tenant_policies:
   my-enterprise-tenant:
-    allowed_gpu_classes: [H100, A100]
+    allowed_gpu_classes: [B200, H200, H100, A100]
     max_rpm: 500
     budget_usd_per_hour: 50.0
     priority_tier_override: premium
+
+  edge-inference:
+    allowed_gpu_classes: [RTX_LAPTOP, RTX4090, L4]
+    max_rpm: 100
+    budget_usd_per_hour: 2.0
+
+  research-lab:
+    allowed_gpu_classes: [B200, H200, H100, A100, RTX_PRO_6000]
+    max_rpm: 200
+    budget_usd_per_hour: 30.0
 ```
 
 ### Presets
@@ -287,17 +374,30 @@ tenant_policies:
 
 ## Telemetry
 
-TokenFlow Router collects:
-- `p50/p95 TTFT` — time to first token
-- `p50/p95 ITL` — inter-token latency
-- `p50/p95 E2E` — end-to-end latency
-- `queue_depth` and `active_requests`
-- `tokens_per_second`
-- `error_rate` and `saturation_score`
+TokenFlow Router collects per-backend metrics automatically:
 
-These can be **pushed** (from NIM sidecars) via `POST /admin/telemetry` or **pulled** (scraped from NIM's Prometheus `/metrics` endpoint) by the background collector.
+### vLLM (`/metrics` — `vllm:` prefix)
+- `num_requests_waiting` — queue depth
+- `gpu_cache_usage_perc` — KV cache utilisation
+- `p50/p95 TTFT`, `ITL`, `E2E` — from Prometheus histograms
 
-Metrics use **EMA smoothing** (configurable alpha) to prevent routing instability from momentary spikes.
+### SGLang (`/get_server_info`)
+- `cache_hit_rate` — RadixAttention KV reuse ratio (stored in `capability_flags`)
+- `num_running_reqs`, `num_waiting_reqs`
+- `avg_prefill_throughput`, `avg_decode_throughput`
+- `token_usage`
+
+### Dynamo (`/metrics` — `vllm:` + `dynamo:` prefix)
+- `dynamo:prefill_worker_queue_depth`
+- `dynamo:decode_worker_queue_depth`
+- `dynamo:kv_hit_rate` — KV transfer reuse ratio
+- `dynamo:kv_cache_transfer_bandwidth_bytes_per_sec`
+
+### NIM (`/metrics` — `nim:` prefix)
+- Standard latency histograms
+- Queue depth and cache utilisation
+
+All metrics use **EMA smoothing** (alpha=0.3) to prevent routing instability from momentary spikes.
 
 ---
 
@@ -306,21 +406,22 @@ Metrics use **EMA smoothing** (configurable alpha) to prevent routing instabilit
 Available at `GET /admin/metrics`:
 
 ```
-tokenflow_route_decisions_total{outcome, endpoint_name, workload_type, priority_tier}
+tokenflow_route_decisions_total{outcome, endpoint_name, workload_type, priority_tier, backend_type}
 tokenflow_route_decision_latency_ms (histogram)
-tokenflow_upstream_request_latency_ms{endpoint_name} (histogram)
-tokenflow_upstream_ttft_ms{endpoint_name} (histogram)
+tokenflow_upstream_request_latency_ms{endpoint_name, backend_type} (histogram)
+tokenflow_upstream_ttft_ms{endpoint_name, backend_type} (histogram)
 tokenflow_estimated_cost_usd_total{tenant_id, endpoint_name}
 tokenflow_fallback_total{reason}
 tokenflow_active_requests{endpoint_name}
-tokenflow_endpoint_health{endpoint_id, endpoint_name}
+tokenflow_endpoint_health{endpoint_id, endpoint_name, backend_type}
+tokenflow_kv_cache_hit_rate{endpoint_name, backend_type}
 ```
 
 ---
 
 ## Simulator
 
-Test routing decisions without real NIM endpoints:
+Test routing decisions without real endpoints:
 
 ```bash
 # CLI
@@ -335,6 +436,7 @@ requests = [make_request_body("meta/llama-3.1-8b-instruct", input_tokens=500, ou
 result = await run_simulation(requests, RoutingPolicy(preset="balanced"))
 print(result.slo_attainment_rate)
 print(result.endpoint_distribution)
+print(result.backend_distribution)
 ```
 
 ---
@@ -343,8 +445,10 @@ print(result.endpoint_distribution)
 
 | Layer | Responsibility | Who owns it |
 |---|---|---|
-| Model serving | Optimised inference runtime, API, lifecycle | **NIM** |
-| Worker-level KV routing | KV cache overlap, decode worker selection | **Dynamo** |
+| Model serving (TensorRT-LLM) | Optimised inference runtime, API, lifecycle | **NIM** |
+| Model serving (PagedAttention) | High-throughput decode, flexible model support | **vLLM** |
+| Model serving (RadixAttention) | Prefill-optimised KV reuse | **SGLang** |
+| Worker-level disaggregated routing | KV cache overlap, prefill/decode worker selection | **Dynamo** |
 | Cross-endpoint policy routing | Request economics, SLOs, GPU lanes, business rules | **TokenFlow Router** |
 
 ---
@@ -353,7 +457,7 @@ print(result.endpoint_distribution)
 
 | Phase | Features |
 |---|---|
-| V1 (current) | Endpoint registry, telemetry, scoring engine, policy DSL, OpenAI gateway, explain API, Prometheus metrics, CLI, simulator |
+| V1 (current) | Endpoint registry, telemetry, NIM + vLLM + SGLang + Dynamo adapters, backend-aware scoring, GPU tier hierarchy (B200→CPU), KV-warm bonus, policy DSL, OpenAI gateway, explain API, Prometheus metrics, CLI, simulator |
 | V2 | Embeddings/rerank routing, multimodal, regional routing, Dynamo hint injection, shadow mode, canary routing |
 | V3 | Learned latency estimators, traffic forecasting, adaptive reservation, RL-assisted policy tuning |
 
