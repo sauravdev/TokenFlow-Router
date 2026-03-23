@@ -1,8 +1,12 @@
 # TokenFlow Router — example policy configuration
 # Copy this to your deployment and customise as needed.
+#
+# Backend types supported: nim | vllm | sglang | dynamo
+# GPU classes supported:   B200 | H200 | H100 | A100 | L40S | L40 |
+#                          RTX_PRO_6000 | A10G | L4 | RTX4090 | RTX_LAPTOP | RTX3090 | CPU
 
 name: production-balanced
-description: "Balanced policy for heterogeneous GPU fleet"
+description: "Balanced policy for heterogeneous GPU fleet with multi-backend support"
 preset: balanced   # latency-first | balanced | cost-first
 
 # Global utility function weights (must sum to ~1.0)
@@ -25,13 +29,21 @@ max_error_rate: 0.10
 
 # DSL rules — evaluated in priority order (lower number = first)
 rules:
-  - name: premium-traffic-on-h100
-    description: "Route premium tier requests to premium GPU lanes"
+  - name: premium-traffic-on-premium-gpu
+    description: "Route premium tier to premium GPU lanes (B200/H200/H100/A100)"
     priority: 10
     conditions:
       priority_tier: "premium"
     actions:
       set_budget_sensitivity: 0.0   # ignore cost for premium
+
+  - name: reasoning-on-nim-preferred
+    description: "Reasoning workloads prefer NIM (TRT-LLM fused kernels + speculative decoding)"
+    priority: 15
+    conditions:
+      workload_type: "reasoning"
+    actions:
+      set_budget_sensitivity: 0.1   # allow premium cost for reasoning
 
   - name: batch-to-economy-lane
     description: "Force batch traffic to economy GPU lanes"
@@ -42,7 +54,7 @@ rules:
       set_budget_sensitivity: 1.0   # maximise cost savings
 
   - name: large-prompt-boost-slo
-    description: "Large prompts get SLO-first routing (prefill-heavy = TTFT matters)"
+    description: "Large prompts get SLO-first routing (prefill-heavy = TTFT matters; prefer SGLang/NIM)"
     priority: 30
     conditions:
       input_tokens_gt: 8000
@@ -51,7 +63,7 @@ rules:
       set_latency_class: "interactive"
 
   - name: decode-heavy-standard-cost
-    description: "Long decode workloads prefer mid-tier GPUs (no need for H100)"
+    description: "Long decode workloads prefer mid-tier GPUs + vLLM/Dynamo backends"
     priority: 40
     conditions:
       output_tokens_gt: 1500
@@ -69,23 +81,47 @@ rules:
       set_priority: "batch"
       set_budget_sensitivity: 0.8
 
+  - name: cpu-only-for-offline
+    description: "CPU endpoints are eligible only for offline/batch workloads"
+    priority: 5
+    conditions:
+      priority_tier: "offline"
+    actions:
+      set_budget_sensitivity: 1.0
+
 # Per-tenant policies
+# GPU classes reference: B200 | H200 | H100 | A100 | L40S | L40 |
+#                        RTX_PRO_6000 | A10G | L4 | RTX4090 | RTX_LAPTOP | RTX3090 | CPU
 tenant_policies:
   tenant-premium-corp:
-    allowed_gpu_classes: [H100, A100, L40S]
+    allowed_gpu_classes: [B200, H200, H100, A100, L40S]
     max_rpm: 500
     budget_usd_per_hour: 50.0
     priority_tier_override: premium
 
   tenant-startup-free:
-    allowed_gpu_classes: [L4, A10G, L40S]
+    allowed_gpu_classes: [L4, A10G, L40S, RTX4090]
     max_rpm: 30
     budget_usd_per_hour: 2.0
     cost_weight_override: 0.9
 
   tenant-batch-jobs:
-    allowed_gpu_classes: [L4, A10G, L40S, L40]
+    allowed_gpu_classes: [L4, A10G, L40S, L40, RTX_PRO_6000, CPU]
     max_rpm: 200
     budget_usd_per_hour: 10.0
     priority_tier_override: batch
     cost_weight_override: 1.0
+
+  tenant-edge-inference:
+    # Edge deployment: RTX Laptop for small models, CPU as last resort
+    allowed_gpu_classes: [RTX_LAPTOP, RTX4090, L4, CPU]
+    max_rpm: 20
+    budget_usd_per_hour: 0.5
+    priority_tier_override: batch
+    cost_weight_override: 1.0
+
+  tenant-research-lab:
+    # Research: RTX Pro 6000 workstations for large model experiments
+    allowed_gpu_classes: [B200, H200, H100, RTX_PRO_6000, A100]
+    max_rpm: 100
+    budget_usd_per_hour: 20.0

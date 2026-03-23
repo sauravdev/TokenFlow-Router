@@ -16,21 +16,42 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class GPUClass(str, Enum):
-    H100 = "H100"
-    A100 = "A100"
-    L40S = "L40S"
-    L40 = "L40"
-    L4 = "L4"
-    RTX4090 = "RTX4090"
-    RTX3090 = "RTX3090"
-    A10G = "A10G"
+    # Blackwell generation
+    B200 = "B200"               # NVIDIA Blackwell B200 — highest compute, 192GB HBM3e
+    # Hopper generation
+    H200 = "H200"               # H200 SXM5 — 141GB HBM3e, best memory bandwidth for decode
+    H100 = "H100"               # H100 SXM5/PCIe — top-tier inference, best prefill
+    # Ampere generation
+    A100 = "A100"               # A100 80GB — strong all-rounder
+    # Ada Lovelace / Ampere datacenter
+    L40S = "L40S"               # L40S 48GB — strong standard lane
+    L40 = "L40"                 # L40 48GB — previous generation Ada
+    # Workstation / prosumer
+    RTX_PRO_6000 = "RTX_PRO_6000"  # RTX Pro 6000 Blackwell — 96GB GDDR7, fits 70B models
+    # Datacenter economy
+    A10G = "A10G"               # A10G 24GB — economy datacenter
+    L4 = "L4"                   # L4 24GB Ada — economy, low-power
+    # Consumer / edge
+    RTX4090 = "RTX4090"         # RTX 4090 24GB — prosumer, limited VRAM
+    RTX_LAPTOP = "RTX_LAPTOP"   # Mobile RTX GPU 8–16GB — edge/small models only
+    RTX3090 = "RTX3090"         # RTX 3090 24GB — older consumer
+    # CPU fallback
+    CPU = "CPU"                 # CPU-only inference — batch/offline tiny models only
     UNKNOWN = "UNKNOWN"
 
 
+class BackendType(str, Enum):
+    """Inference serving backend used by an endpoint."""
+    NIM = "nim"         # NVIDIA NIM (TensorRT-LLM / Triton) — fastest prefill, best for reasoning
+    VLLM = "vllm"       # vLLM PagedAttention — excellent decode throughput, memory-efficient batching
+    SGLANG = "sglang"   # SGLang RadixAttention — best for prefix-heavy/shared-prefix (RAG, long context)
+    DYNAMO = "dynamo"   # NVIDIA Dynamo — distributed KV-aware routing across worker pools
+
+
 class CostClass(str, Enum):
-    PREMIUM = "premium"     # H100 / A100 80GB
-    STANDARD = "standard"   # L40S / A10G
-    ECONOMY = "economy"     # L4 / RTX
+    PREMIUM = "premium"     # B200 / H200 / H100 / A100
+    STANDARD = "standard"   # L40S / L40 / RTX_PRO_6000 / A10G
+    ECONOMY = "economy"     # L4 / RTX4090 / RTX_LAPTOP / RTX3090 / CPU
 
 
 class PriorityTier(str, Enum):
@@ -82,11 +103,12 @@ class RouteOutcome(str, Enum):
 
 
 class EndpointProfile(BaseModel):
-    """Registered NIM endpoint with static metadata."""
+    """Registered inference endpoint with static metadata (NIM, vLLM, SGLang, or Dynamo)."""
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = Field(..., description="Human-readable name, e.g. 'nim-h100-llama3'")
-    nim_url: str = Field(..., description="Base URL of the NIM endpoint")
+    nim_url: str = Field(..., description="Base URL of the inference endpoint")
+    backend_type: BackendType = Field(default=BackendType.NIM, description="Serving backend: nim | vllm | sglang | dynamo")
     model_name: str = Field(..., description="Model served, e.g. 'meta/llama-3.1-8b-instruct'")
     model_family: str = Field(default="", description="Model family, e.g. 'llama3'")
     model_version: str = Field(default="latest")
@@ -120,6 +142,7 @@ class EndpointProfile(BaseModel):
 class EndpointRegisterRequest(BaseModel):
     name: str
     nim_url: str
+    backend_type: BackendType = BackendType.NIM
     model_name: str
     model_family: str = ""
     model_version: str = "latest"

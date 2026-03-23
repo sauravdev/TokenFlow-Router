@@ -11,8 +11,12 @@ from typing import Optional
 import httpx
 import structlog
 
+from tokenflow.adapters.dynamo.client import DynamoClient
+from tokenflow.adapters.nim.client import NIMClient
+from tokenflow.adapters.sglang.client import SGLangClient
+from tokenflow.adapters.vllm.client import VLLMClient
 from tokenflow.config import settings
-from tokenflow.models import EndpointHealth, EndpointProfile, EndpointTelemetry, TelemetryUpdate
+from tokenflow.models import BackendType, EndpointHealth, EndpointProfile, EndpointTelemetry, TelemetryUpdate
 
 logger = structlog.get_logger(__name__)
 
@@ -128,18 +132,27 @@ class TelemetryStore:
 
 class TelemetryCollector:
     """
-    Background task that polls NIM endpoints for live metrics.
+    Background task that polls inference endpoints for live metrics.
 
-    NIM exposes a /v1/health/ready endpoint and optionally a Prometheus
-    /metrics path. We use a lightweight health probe and infer queue
-    pressure from response timing.
+    Dispatches to the appropriate backend-specific adapter based on
+    ep.backend_type so each serving stack is probed with its native
+    health + metrics endpoints:
+
+      NIM    → /v1/health/ready + /metrics (Prometheus, vllm:/nim: prefix)
+      vLLM   → /health + /metrics (Prometheus, vllm: prefix)
+      SGLang → /health_generate + /get_server_info (JSON, rich cache stats)
+      Dynamo → /health + /metrics (Prometheus, vllm: + dynamo: prefix)
     """
 
     def __init__(self, store: TelemetryStore) -> None:
         self._store = store
         self._endpoints: list[EndpointProfile] = []
         self._task: Optional[asyncio.Task] = None
-        self._client: Optional[httpx.AsyncClient] = None
+        # Per-backend clients — created lazily at start()
+        self._nim_client: Optional[NIMClient] = None
+        self._vllm_client: Optional[VLLMClient] = None
+        self._sglang_client: Optional[SGLangClient] = None
+        self._dynamo_client: Optional[DynamoClient] = None
 
     def register_endpoint(self, ep: EndpointProfile) -> None:
         if not any(e.id == ep.id for e in self._endpoints):
@@ -149,7 +162,10 @@ class TelemetryCollector:
         self._endpoints = [e for e in self._endpoints if e.id != endpoint_id]
 
     async def start(self) -> None:
-        self._client = httpx.AsyncClient(timeout=5.0)
+        self._nim_client = NIMClient(timeout=5.0)
+        self._vllm_client = VLLMClient(timeout=5.0)
+        self._sglang_client = SGLangClient(timeout=8.0)  # health_generate can be slower
+        self._dynamo_client = DynamoClient(timeout=5.0)
         self._task = asyncio.create_task(self._loop(), name="telemetry_collector")
         logger.info("telemetry_collector_started", interval_s=settings.telemetry_scrape_interval_s)
 
@@ -160,8 +176,9 @@ class TelemetryCollector:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self._client:
-            await self._client.aclose()
+        for client in (self._nim_client, self._vllm_client, self._sglang_client, self._dynamo_client):
+            if client:
+                await client.close()
         logger.info("telemetry_collector_stopped")
 
     async def _loop(self) -> None:
@@ -172,39 +189,50 @@ class TelemetryCollector:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _scrape(self, ep: EndpointProfile) -> None:
-        """Scrape a single endpoint. Uses timing + health probe as proxy metrics."""
-        assert self._client is not None
-        start = time.perf_counter()
+        """
+        Scrape a single endpoint using its backend-specific adapter.
+
+        Each adapter returns a TelemetryUpdate that may contain rich metrics
+        (Prometheus histograms, cache hit rates, queue depths) or fall back to
+        probe-timing estimates when native metrics are unavailable.
+        """
         health = EndpointHealth.UNKNOWN
         try:
-            resp = await self._client.get(f"{ep.nim_url}/v1/health/ready")
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            if resp.status_code == 200:
-                health = EndpointHealth.HEALTHY
-                # Use probe latency as TTFT proxy if no richer metrics
-                update = TelemetryUpdate(
-                    endpoint_id=ep.id,
-                    p50_ttft_ms=elapsed_ms,
-                    p95_ttft_ms=elapsed_ms * 1.5,
-                    p50_e2e_ms=elapsed_ms,
-                    p95_e2e_ms=elapsed_ms * 2.0,
-                    error_rate=0.0,
-                )
-            else:
-                health = EndpointHealth.DEGRADED
-                update = TelemetryUpdate(
-                    endpoint_id=ep.id,
-                    error_rate=0.5,
-                    saturation_score=0.8,
-                )
+            update = await self._probe_by_backend(ep)
             await self._store.upsert(update)
+
+            # Derive health from telemetry
+            health = self._store.compute_health(ep.id)
+            logger.debug(
+                "endpoint_scraped",
+                endpoint=ep.name,
+                backend=ep.backend_type,
+                health=health,
+                error_rate=update.error_rate,
+            )
         except Exception as exc:
             health = EndpointHealth.UNHEALTHY
-            logger.warning("scrape_failed", endpoint_id=ep.id, error=str(exc))
+            logger.warning("scrape_failed", endpoint_id=ep.id, backend=ep.backend_type, error=str(exc))
             await self._store.upsert(
                 TelemetryUpdate(endpoint_id=ep.id, error_rate=1.0, saturation_score=1.0)
             )
 
-        # Registry health update is done via the app's registry reference
-        # (injected at startup)
         ep.health = health
+
+    async def _probe_by_backend(self, ep: EndpointProfile) -> TelemetryUpdate:
+        """Dispatch to the correct backend adapter."""
+        if ep.backend_type == BackendType.VLLM:
+            assert self._vllm_client is not None
+            return await self._vllm_client.probe(ep)
+
+        if ep.backend_type == BackendType.SGLANG:
+            assert self._sglang_client is not None
+            return await self._sglang_client.probe(ep)
+
+        if ep.backend_type == BackendType.DYNAMO:
+            assert self._dynamo_client is not None
+            return await self._dynamo_client.probe(ep)
+
+        # Default: NIM (also handles UNKNOWN backend_type gracefully)
+        assert self._nim_client is not None
+        return await self._nim_client.probe(ep)

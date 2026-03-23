@@ -14,6 +14,7 @@ from typing import Optional
 import structlog
 
 from tokenflow.models import (
+    BackendType,
     CandidateScore,
     CostClass,
     EndpointHealth,
@@ -33,20 +34,72 @@ from tokenflow.telemetry import TelemetryStore
 
 logger = structlog.get_logger(__name__)
 
-# GPU tier ordering — higher = more powerful
+# GPU tier ordering — higher = more powerful / capable for inference
+# Informed by memory bandwidth (critical for decode) and compute (critical for prefill).
+#   B200  : 192GB HBM3e, Blackwell compute, best for everything
+#   H200  : 141GB HBM3e, ~4.8TB/s — best memory bandwidth → fastest decode
+#   H100  : 80GB HBM3, ~3.35TB/s — best TensorRT-LLM prefill throughput
+#   A100  : 80GB HBM2e, ~2TB/s — strong all-rounder
+#   L40S  : 48GB GDDR6X, Ada Lovelace — strong standard lane
+#   L40   : 48GB GDDR6, older Ada — slightly below L40S
+# RTX_PRO_6000: 96GB GDDR7 Blackwell workstation — fits 70B bf16, ~576GB/s bw
+#   A10G  : 24GB, ~600GB/s — economy datacenter, good for small/medium models
+#   L4    : 24GB Ada, ~300GB/s — low-power economy
+#   RTX4090: 24GB GDDR6X, consumer — similar to L4 performance
+# RTX_LAPTOP: 8–16GB GDDR6, mobile — small models only (≤13B)
+#   RTX3090: 24GB GDDR6X, older — legacy
+#   CPU   : CPU-only inference — llama.cpp / batch only, very high latency
 _GPU_TIER: dict[GPUClass, int] = {
-    GPUClass.H100: 5,
-    GPUClass.A100: 4,
-    GPUClass.L40S: 3,
+    GPUClass.B200: 8,
+    GPUClass.H200: 7,
+    GPUClass.H100: 6,
+    GPUClass.A100: 5,
+    GPUClass.L40S: 4,
     GPUClass.L40: 3,
+    GPUClass.RTX_PRO_6000: 3,   # 96GB GDDR7 — VRAM advantage over L40S; lower bw
     GPUClass.A10G: 2,
     GPUClass.L4: 2,
     GPUClass.RTX4090: 2,
+    GPUClass.RTX_LAPTOP: 1,
     GPUClass.RTX3090: 1,
+    GPUClass.CPU: 0,
     GPUClass.UNKNOWN: 2,
 }
 
-# Cost tier ordering — lower = cheaper
+# Backend affinity multipliers per workload type.
+# These reflect each backend's architectural strengths:
+#   NIM   (TensorRT-LLM) — fused kernels, best for reasoning + structured prefill
+#   vLLM  (PagedAttention) — memory-efficient batching, best for decode-heavy / long output
+#   SGLang (RadixAttention) — prefix cache reuse, best for prefill-heavy / shared prompts
+#   Dynamo (disaggregated) — KV-transfer across nodes, strong for both when KV-warm
+_BACKEND_AFFINITY: dict[BackendType, dict[WorkloadType, float]] = {
+    BackendType.NIM: {
+        WorkloadType.REASONING:    1.00,  # TRT-LLM fused attention + speculative decoding
+        WorkloadType.PREFILL_HEAVY: 0.90,  # Very fast prefill via TRT-LLM
+        WorkloadType.BALANCED:     0.80,
+        WorkloadType.DECODE_HEAVY: 0.70,  # Capable but vLLM/Dynamo edge it here
+    },
+    BackendType.VLLM: {
+        WorkloadType.DECODE_HEAVY:  1.00,  # PagedAttention = most memory-efficient long decode
+        WorkloadType.BALANCED:      0.85,
+        WorkloadType.PREFILL_HEAVY: 0.70,
+        WorkloadType.REASONING:     0.75,
+    },
+    BackendType.SGLANG: {
+        WorkloadType.PREFILL_HEAVY: 1.00,  # RadixAttention prefix cache — skip repeated prefill
+        WorkloadType.BALANCED:      0.85,
+        WorkloadType.DECODE_HEAVY:  0.75,
+        WorkloadType.REASONING:     0.70,  # Good but no speculative decoding advantage
+    },
+    BackendType.DYNAMO: {
+        WorkloadType.PREFILL_HEAVY: 0.95,  # Disaggregated prefill pool + KV transfer
+        WorkloadType.DECODE_HEAVY:  0.95,  # Dedicated decode workers
+        WorkloadType.BALANCED:      0.90,
+        WorkloadType.REASONING:     0.85,
+    },
+}
+
+# Cost tier ordering — lower = cheaper per GPU-hour
 _COST_TIER: dict[CostClass, float] = {
     CostClass.ECONOMY: 1.0,
     CostClass.STANDARD: 2.5,
@@ -118,6 +171,20 @@ class ScoringEngine:
         # Error rate ceiling
         if tel and tel.error_rate > self.policy.max_error_rate:
             return f"error_rate_too_high({tel.error_rate:.2f})"
+
+        # CPU endpoints: only eligible for BATCH or OFFLINE workloads
+        # CPU inference (llama.cpp / gguf) has 10–100x higher latency than GPU.
+        if ep.gpu_name == GPUClass.CPU:
+            if req.latency_class not in (LatencyClass.BATCH, LatencyClass.OFFLINE):
+                return "cpu_endpoint_requires_batch_or_offline_latency_class"
+            if req.priority_tier not in (PriorityTier.BATCH, PriorityTier.OFFLINE):
+                return "cpu_endpoint_requires_batch_or_offline_priority_tier"
+
+        # RTX_LAPTOP: only suitable for small/tiny models (token budget guard)
+        if ep.gpu_name == GPUClass.RTX_LAPTOP:
+            total_tokens = req.input_tokens + req.predicted_output_tokens
+            if total_tokens > 4096:
+                return f"rtx_laptop_token_budget_exceeded({total_tokens}>4096)"
 
         # Premium tier: only allow cost_class=premium or standard
         if req.priority_tier == PriorityTier.BATCH:
@@ -208,28 +275,59 @@ class ScoringEngine:
     def gpu_affinity_score(
         self, ep: EndpointProfile, req: RequestProfile
     ) -> float:
-        """Score GPU fit for the request's workload type."""
+        """
+        Score the hardware + backend combination for the request's workload type.
+
+        Two components:
+          1. GPU tier score — raw hardware capability (compute / memory bandwidth)
+          2. Backend affinity multiplier — architectural fit for the workload
+
+        Additionally, KV-cache warm signals from SGLang (cache_hit_rate) and
+        Dynamo (kv_hit_rate) provide a bonus that reflects real-time prefix reuse,
+        which can dramatically reduce effective TTFT for prefill-heavy workloads.
+        """
         gpu_tier = _GPU_TIER.get(ep.gpu_name, 2)
+        max_tier = 8  # B200
 
+        # Normalise GPU tier to [0, 1]
+        gpu_score: float
         if req.priority_tier == PriorityTier.PREMIUM:
-            # Premium requests want highest-tier GPUs
-            return _clamp(gpu_tier / 5.0)
+            # Premium requests want maximum tier — linear scaling
+            gpu_score = gpu_tier / max_tier
+        elif req.workload_type == WorkloadType.PREFILL_HEAVY:
+            # Prefill is compute-bound; higher tier matters significantly
+            gpu_score = gpu_tier / max_tier
+        elif req.workload_type == WorkloadType.DECODE_HEAVY:
+            # Decode is memory-bandwidth-bound.
+            # H200 (tier 7) edges out H100 (tier 6) here due to higher HBM3e bandwidth.
+            # Mid-range GPUs with large VRAM (RTX_PRO_6000) can be surprisingly competitive.
+            # Penalise premium GPUs slightly to avoid wasting B200/H100 on simple decode.
+            over_provision_penalty = 0.08 if ep.cost_class == CostClass.PREMIUM else 0.0
+            gpu_score = gpu_tier / max_tier * 0.75 - over_provision_penalty
+        elif req.workload_type == WorkloadType.REASONING:
+            # Reasoning requires both compute + memory; top tier matters
+            gpu_score = gpu_tier / max_tier
+        else:
+            # Balanced — moderate preference for higher tier
+            gpu_score = gpu_tier / max_tier * 0.8
 
+        # Backend affinity multiplier
+        backend_affinity = _BACKEND_AFFINITY.get(
+            ep.backend_type, {WorkloadType.BALANCED: 0.5}
+        ).get(req.workload_type, 0.6)
+
+        combined = gpu_score * backend_affinity
+
+        # KV-cache warm bonus: if this endpoint has a warm prefix cache for the
+        # current traffic pattern, reward it — applies for PREFILL_HEAVY workloads
+        # where cache hits save meaningful compute.
         if req.workload_type == WorkloadType.PREFILL_HEAVY:
-            # Needs strong prefill — higher tier helps more
-            return _clamp(gpu_tier / 5.0)
+            sglang_hit = ep.capability_flags.get("sglang_cache_hit_rate", 0.0)
+            dynamo_hit = ep.capability_flags.get("dynamo_kv_hit_rate", 0.0)
+            cache_bonus = max(float(sglang_hit), float(dynamo_hit)) * 0.15  # up to +0.15
+            combined += cache_bonus
 
-        if req.workload_type == WorkloadType.DECODE_HEAVY:
-            # Decode is less GPU-tier-sensitive; mid-range is fine
-            # Penalise over-provisioning premium GPUs on cheap decode
-            over_provision_penalty = 0.1 if ep.cost_class == CostClass.PREMIUM else 0.0
-            return _clamp(gpu_tier / 5.0 * 0.7 - over_provision_penalty)
-
-        if req.workload_type == WorkloadType.REASONING:
-            return _clamp(gpu_tier / 5.0)
-
-        # Balanced — moderate preference for higher tier
-        return _clamp(gpu_tier / 5.0 * 0.8)
+        return _clamp(combined)
 
     def model_fit_score(self, ep: EndpointProfile, req: RequestProfile) -> float:
         """Exact model match > family match > wildcard."""

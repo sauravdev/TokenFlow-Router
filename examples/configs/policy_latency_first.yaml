@@ -1,5 +1,14 @@
+# TokenFlow Router — latency-first preset
+# Optimise for lowest TTFT and E2E — cost is secondary.
+# Best for: premium real-time applications, interactive chat, low-latency APIs.
+#
+# GPU priority order for this preset:
+#   B200 > H200 > H100 > A100 > L40S > RTX_PRO_6000 > ...
+# Backend priority:
+#   NIM (reasoning/prefill) | Dynamo (distributed) | vLLM (decode) | SGLang (prefix-heavy)
+
 name: latency-first
-description: "Optimise for lowest TTFT and E2E — ignore cost"
+description: "Optimise for lowest TTFT and E2E — ignore cost. Prefer B200/H200/H100 + NIM/Dynamo."
 preset: latency-first
 
 slo_ttft_ms: 300
@@ -11,8 +20,31 @@ max_error_rate: 0.05
 
 rules:
   - name: always-premium-gpu
+    description: "All traffic uses premium GPU lanes regardless of tier"
     priority: 10
     conditions:
       priority_tier: "standard"
     actions:
       set_budget_sensitivity: 0.0
+
+  - name: reasoning-nim-b200
+    description: "Reasoning workloads target NIM on B200/H200 for maximum throughput"
+    priority: 5
+    conditions:
+      workload_type: "reasoning"
+    actions:
+      set_budget_sensitivity: 0.0
+
+  - name: prefill-heavy-tight-slo
+    description: "Large prompts get the tightest TTFT target"
+    priority: 15
+    conditions:
+      input_tokens_gt: 4000
+    actions:
+      set_latency_class: "interactive"
+      set_budget_sensitivity: 0.0
+
+tenant_policies:
+  default:
+    allowed_gpu_classes: [B200, H200, H100, A100, L40S]
+    cost_weight_override: 0.0

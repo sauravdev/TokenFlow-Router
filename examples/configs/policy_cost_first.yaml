@@ -1,5 +1,14 @@
+# TokenFlow Router — cost-first preset
+# Minimise cost — use economy lanes unless SLO is at risk.
+# Best for: batch processing, background jobs, development/staging, edge deployments.
+#
+# GPU preference for this preset:
+#   L4 / A10G / RTX_PRO_6000 / RTX4090 / RTX_LAPTOP / CPU
+# Backend preference:
+#   vLLM (PagedAttention efficiency) | SGLang (prefix cache = fewer tokens billed)
+
 name: cost-first
-description: "Minimise cost — use economy lanes unless SLO is at risk"
+description: "Minimise cost — economy lanes first, CPU for offline. Relaxed SLOs."
 preset: cost-first
 
 slo_ttft_ms: 2000
@@ -11,6 +20,7 @@ max_error_rate: 0.15
 
 rules:
   - name: premium-only-for-premium-tier
+    description: "Only premium-tier users can access H100/H200/B200 lanes"
     priority: 10
     conditions:
       priority_tier: "premium"
@@ -18,8 +28,49 @@ rules:
       set_budget_sensitivity: 0.0
 
   - name: batch-max-economy
+    description: "Batch traffic routes to cheapest available lane"
     priority: 20
     conditions:
       priority_tier: "batch"
     actions:
       set_budget_sensitivity: 1.0
+
+  - name: offline-allow-cpu
+    description: "Offline workloads may use CPU endpoints (llama.cpp / gguf)"
+    priority: 25
+    conditions:
+      priority_tier: "offline"
+    actions:
+      set_budget_sensitivity: 1.0
+      set_latency_class: "offline"
+
+  - name: standard-prefer-mid-tier
+    description: "Standard requests use mid-tier GPUs (L40S / RTX_PRO_6000 / A10G)"
+    priority: 30
+    conditions:
+      priority_tier: "standard"
+    actions:
+      set_budget_sensitivity: 0.8
+
+  - name: rtx-laptop-for-tiny
+    description: "Very small requests can use RTX Laptop endpoints to minimise cost"
+    priority: 40
+    conditions:
+      input_tokens_lt: 512
+      output_tokens_lt: 256
+      priority_tier: "batch"
+    actions:
+      set_budget_sensitivity: 1.0
+
+tenant_policies:
+  default:
+    # Economy-first: allow all GPU tiers but weight strongly toward cheap ones
+    allowed_gpu_classes: [L4, A10G, L40, L40S, RTX4090, RTX_PRO_6000, RTX_LAPTOP, CPU]
+    cost_weight_override: 0.9
+
+  tenant-batch-bulk:
+    allowed_gpu_classes: [L4, A10G, RTX4090, RTX_LAPTOP, CPU]
+    max_rpm: 500
+    budget_usd_per_hour: 5.0
+    priority_tier_override: batch
+    cost_weight_override: 1.0
