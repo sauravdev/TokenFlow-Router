@@ -8,6 +8,7 @@ GET  /health               — liveness probe
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -84,6 +85,11 @@ async def chat_completions(
     # Record trace
     state.trace_store.record(profile, decision, state.policy_engine.policy.name)
 
+    # Background: lazily activate any profile templates matching this workload
+    asyncio.create_task(
+        state.profile_manager.maybe_activate_for_workload(profile.workload_type)
+    )
+
     streaming = body.get("stream", False)
     failed_ids: list[str] = []
 
@@ -102,6 +108,7 @@ async def chat_completions(
                     endpoint, body, dict(request.headers)
                 )
                 e2e_ms = (time.perf_counter() - t_start) * 1000
+                ACTIVE_REQUESTS.labels(endpoint_name=endpoint.name).dec()
                 state.trace_store.record_actual_latency(
                     profile.request_id, endpoint.name, None, e2e_ms
                 )
@@ -138,6 +145,15 @@ async def chat_completions(
                     },
                 )
             endpoint = await state.registry.get(fallback.selected_endpoint_id)
+            if endpoint is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "fallback_endpoint_vanished",
+                        "message": "Fallback endpoint was removed from registry mid-request.",
+                        "request_id": profile.request_id,
+                    },
+                )
             decision = fallback
 
     raise HTTPException(status_code=503, detail="Max fallback attempts exceeded.")

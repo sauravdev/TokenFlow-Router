@@ -148,6 +148,72 @@ class TraceStore:
         items = list(self._buffer)
         return items[-limit:]
 
+    def workload_report(self) -> dict:
+        """
+        Aggregate routing statistics from the in-memory trace buffer.
+
+        Returns per-backend and per-workload breakdowns of:
+        - request counts
+        - total input/output tokens routed
+        - total estimated cost USD
+        - average decision latency
+        - outcome distribution
+        """
+        from collections import defaultdict
+
+        by_backend: dict[str, dict] = defaultdict(lambda: {
+            "requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "avg_decision_ms": 0.0,
+            "_decision_ms_sum": 0.0,
+        })
+        by_workload: dict[str, dict] = defaultdict(lambda: {
+            "requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+        })
+        outcomes: dict[str, int] = defaultdict(int)
+        total = 0
+
+        for trace in self._buffer:
+            total += 1
+            ep_name = trace.decision.selected_endpoint_name or "unrouted"
+            wt = trace.request_profile.workload_type.value
+            outcome = trace.decision.outcome.value
+            inp = trace.request_profile.input_tokens
+            out = trace.request_profile.predicted_output_tokens
+            cost = trace.decision.estimated_cost_usd
+            dec_ms = trace.decision.decision_latency_ms
+
+            b = by_backend[ep_name]
+            b["requests"] += 1
+            b["input_tokens"] += inp
+            b["output_tokens"] += out
+            b["estimated_cost_usd"] = round(b["estimated_cost_usd"] + cost, 6)
+            b["_decision_ms_sum"] += dec_ms
+
+            w = by_workload[wt]
+            w["requests"] += 1
+            w["input_tokens"] += inp
+            w["output_tokens"] += out
+
+            outcomes[outcome] += 1
+
+        # Finalise averages
+        for b in by_backend.values():
+            reqs = b["requests"]
+            b["avg_decision_ms"] = round(b["_decision_ms_sum"] / reqs, 3) if reqs else 0.0
+            del b["_decision_ms_sum"]
+
+        return {
+            "total_requests": total,
+            "outcomes": dict(outcomes),
+            "by_backend": dict(by_backend),
+            "by_workload": dict(by_workload),
+        }
+
     def record_actual_latency(
         self,
         request_id: str,

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # Auth (optional)
     admin_api_key: str | None = None
 
+    # CORS — comma-separated list of allowed origins; "*" only for local dev
+    allowed_origins: str = "*"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
     # Upstream request forwarding
     upstream_timeout_s: int = 120
     upstream_connect_timeout_s: int = 5

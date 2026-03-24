@@ -182,7 +182,6 @@ class ScoringEngine:
 
         # RTX_LAPTOP: only suitable for small/tiny models (token budget guard)
         if ep.gpu_name == GPUClass.RTX_LAPTOP:
-            total_tokens = req.input_tokens + req.predicted_output_tokens
             if total_tokens > 4096:
                 return f"rtx_laptop_token_budget_exceeded({total_tokens}>4096)"
 
@@ -263,6 +262,9 @@ class ScoringEngine:
     def queue_score(self, ep: EndpointProfile) -> float:
         tel = self.store.get(ep.id)
         if not tel or self.store.is_stale(ep.id):
+            # No telemetry ever received → conservative penalty for degraded endpoints
+            if ep.health == EndpointHealth.DEGRADED:
+                return 0.3
             return 0.5  # neutral if unknown
 
         # Saturation score is 0=idle, 1=full
@@ -537,6 +539,12 @@ class DecisionEngine:
                 selected_endpoint_id=None,
                 selected_endpoint_name=None,
                 candidate_scores=scores,
+                hard_rejections=[
+                    {"endpoint_id": s.endpoint_id, "reason": s.rejection_reason or ""}
+                    for s in scores
+                    if s.hard_rejected
+                ],
+                policy_id=self._policy.id,
                 outcome=RouteOutcome.FAILED,
                 fallback_used=True,
                 fallback_count=len(failed_ids),

@@ -30,19 +30,35 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.security import APIKeyHeader
 
+from tokenflow.config import settings
 from tokenflow.models import (
     EndpointRegisterRequest,
     RoutingPolicy,
     TelemetryUpdate,
 )
 from tokenflow.observability import get_metrics_output
+from tokenflow.profiles import BackendProfileTemplate
 from tokenflow.router import _apply_preset
 
 logger = structlog.get_logger(__name__)
-router = APIRouter(prefix="/admin")
+
+_ADMIN_KEY_HEADER = APIKeyHeader(name="X-Admin-API-Key", auto_error=False)
+
+
+async def require_admin_auth(api_key: str | None = Security(_ADMIN_KEY_HEADER)) -> None:
+    """Enforce admin API key when TOKENFLOW_ADMIN_API_KEY is configured."""
+    if settings.admin_api_key and api_key != settings.admin_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid X-Admin-API-Key header.",
+        )
+
+
+router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin_auth)])
 
 
 def _state(request: Request):
@@ -213,6 +229,77 @@ async def recent_routes(request: Request, limit: int = 50) -> JSONResponse:
     state = _state(request)
     traces = state.trace_store.recent(limit=min(limit, 500))
     return JSONResponse(content=[t.model_dump(mode="json") for t in traces])
+
+
+# ---------------------------------------------------------------------------
+# Backend profile templates (dynamic lazy activation)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/profiles", status_code=201)
+async def register_profile_template(
+    body: BackendProfileTemplate, request: Request
+) -> JSONResponse:
+    """Register a backend profile template for lazy activation."""
+    state = _state(request)
+    template = await state.profile_manager.add_template(body)
+    return JSONResponse(content=template.model_dump(mode="json"), status_code=201)
+
+
+@router.get("/profiles")
+async def list_profile_templates(request: Request) -> JSONResponse:
+    state = _state(request)
+    templates = await state.profile_manager.list_templates()
+    return JSONResponse(content=[t.model_dump(mode="json") for t in templates])
+
+
+@router.get("/profiles/{template_id}")
+async def get_profile_template(template_id: str, request: Request) -> JSONResponse:
+    state = _state(request)
+    t = await state.profile_manager.get_template(template_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return JSONResponse(content=t.model_dump(mode="json"))
+
+
+@router.post("/profiles/{template_id}/activate")
+async def activate_profile_template(template_id: str, request: Request) -> JSONResponse:
+    """Manually activate a profile template (register it as a live endpoint)."""
+    state = _state(request)
+    t = await state.profile_manager.activate_template(template_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return JSONResponse(content=t.model_dump(mode="json"))
+
+
+@router.delete("/profiles/{template_id}", status_code=204)
+async def delete_profile_template(template_id: str, request: Request) -> Response:
+    state = _state(request)
+    deleted = await state.profile_manager.delete_template(template_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Workload report
+# ---------------------------------------------------------------------------
+
+
+@router.get("/report")
+async def workload_report(request: Request) -> JSONResponse:
+    """
+    Aggregate workload statistics from the in-memory trace buffer.
+
+    Returns:
+    - total_requests: total routing decisions recorded
+    - outcomes: count by outcome (success / fallback_used / failed / rejected)
+    - by_backend: per-endpoint breakdown of requests, tokens, cost, avg decision latency
+    - by_workload: per-workload-type breakdown of requests and tokens
+    """
+    state = _state(request)
+    report = state.trace_store.workload_report()
+    return JSONResponse(content=report)
 
 
 # ---------------------------------------------------------------------------
