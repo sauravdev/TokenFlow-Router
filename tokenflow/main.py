@@ -21,6 +21,7 @@ from tokenflow.gateway.proxy import UpstreamProxy
 from tokenflow.gateway.routes import router as gateway_router
 from tokenflow.observability import TraceStore
 from tokenflow.policy_engine.engine import PolicyEngine, load_policy_from_yaml
+from tokenflow.profiles import ProfileManager
 from tokenflow.registry import EndpointRegistry
 from tokenflow.router import DecisionEngine, _apply_preset
 from tokenflow.telemetry import TelemetryCollector, TelemetryStore
@@ -84,6 +85,10 @@ async def lifespan(app: FastAPI):
     # Proxy
     proxy = UpstreamProxy()
 
+    # Profile manager (dynamic backend lazy activation)
+    profile_manager = ProfileManager()
+    profile_manager.attach(registry, telemetry_collector)
+
     # Attach to app state
     app.state.registry = registry
     app.state.telemetry_store = telemetry_store
@@ -92,6 +97,7 @@ async def lifespan(app: FastAPI):
     app.state.policy_engine = policy_engine
     app.state.decision_engine = decision_engine
     app.state.proxy = proxy
+    app.state.profile_manager = profile_manager
 
     logger.info("tokenflow_ready")
     yield
@@ -116,11 +122,14 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
+    cors_origins = settings.cors_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cors_origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-Admin-API-Key",
+                       "X-Tenant-ID", "X-App-ID", "X-Priority-Tier", "X-Budget-Sensitivity"],
+        allow_credentials=cors_origins != ["*"],
     )
 
     app.include_router(gateway_router, tags=["inference"])

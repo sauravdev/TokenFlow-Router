@@ -453,6 +453,54 @@ print(result.backend_distribution)
 
 ---
 
+## Implementation Status
+
+This section reflects the current maturity of the codebase so contributors and users can set accurate expectations.
+
+### Implemented and production-ready
+
+| Area | Details |
+|---|---|
+| Endpoint registry | Register, list, enable/disable, delete endpoints via REST API |
+| Multi-backend support | NIM, vLLM, SGLang, Dynamo — with per-backend telemetry adapters |
+| Scoring engine | 6-component weighted utility function (SLO, cost, queue, GPU affinity, model fit, reliability) |
+| GPU tier hierarchy | B200 → H200 → H100 → A100 → L40S → ... → CPU |
+| Backend affinity | Per-backend multipliers per workload type (prefill-heavy, decode-heavy, balanced, reasoning) |
+| KV-cache warm bonus | SGLang cache_hit_rate + Dynamo kv_hit_rate used to reward warm prefix caches |
+| Hard constraint filtering | CPU-only-for-batch, RTX_LAPTOP token budget, queue depth ceiling, error rate ceiling |
+| Policy DSL | Rules with conditions + actions, tenant policies, RPM/budget throttling |
+| 3 routing presets | `latency-first`, `balanced`, `cost-first` — hot-swappable via API |
+| Fallback chain | Automatic re-routing on upstream failure, excludes failed endpoints |
+| OpenAI-compatible gateway | POST /v1/chat/completions — streaming + non-streaming, SSE |
+| Token counting | tiktoken (cl100k_base) when available, 4-chars/token heuristic fallback |
+| Telemetry collection | Background EMA-smoothed polling every 10s, per-backend adapters |
+| Stale telemetry handling | Falls back to GPU-tier heuristics after 60s stale threshold |
+| Observability | Prometheus metrics, structured JSON logs, per-request explain API |
+| Workload report | GET /admin/report — tokens/requests/cost per backend + workload breakdown |
+| Admin API auth | Optional `TOKENFLOW_ADMIN_API_KEY` enforced on all `/admin/*` routes |
+| CORS hardening | Configurable `TOKENFLOW_ALLOWED_ORIGINS` (default `*` for local dev) |
+| Dynamic backend profiles | Profile templates with `workload_affinity` — lazily activated in background on first matching request |
+
+### Partially implemented / known gaps
+
+| Area | Status |
+|---|---|
+| Token estimation accuracy | tiktoken cl100k_base is ~1–2% accurate for most models; not byte-perfect for every model family |
+| Registry persistence | In-memory only — endpoints lost on restart, no disk/DB persistence |
+| Endpoint health on registration | No initial health check at registration time; relies on background polling |
+| Streaming TTFT measurement | Measures TTFT from first SSE chunk, which may include proxy overhead |
+| Policy conflict resolution | Tenant policy + DSL rules can produce conflicting overrides; last-rule-wins semantics |
+| Dynamic profile lifecycle | Profiles can be activated but not automatically deactivated when workload disappears |
+
+### Planned / roadmap
+
+| Phase | Features |
+|---|---|
+| V2 | Embeddings/rerank routing, multimodal support, regional routing, Dynamo hint injection, shadow mode, canary routing, registry persistence |
+| V3 | Learned latency estimators, traffic forecasting, adaptive reservation, RL-assisted policy tuning |
+
+---
+
 ## Roadmap
 
 | Phase | Features |
