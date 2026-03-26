@@ -177,8 +177,13 @@ def test_chat_completions_routing_decision_made(client, registered_endpoint):
             "model": "meta/llama-3.1-8b-instruct",
             "messages": [{"role": "user", "content": "hi"}],
             "max_tokens": 16,
+            "routing": {"optimize_for": "throughput"},
         },
-        headers={"x-tenant-id": "default", "x-priority-tier": "standard"},
+        headers={
+            "x-tenant-id": "default",
+            "x-priority-tier": "standard",
+            "x-optimization-target": "latency",
+        },
     )
     # Will be 503 (upstream not running) or 200 (if mock responded)
     assert resp.status_code in (200, 503)

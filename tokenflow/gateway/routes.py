@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from tokenflow.classifier import RequestClassifier
 from tokenflow.config import settings
-from tokenflow.models import PriorityTier
+from tokenflow.models import OptimizationTarget, PriorityTier
 from tokenflow.observability import ACTIVE_REQUESTS
 
 logger = structlog.get_logger(__name__)
@@ -37,6 +37,7 @@ async def chat_completions(
     x_tenant_id: str = Header(default="default"),
     x_app_id: str = Header(default="default"),
     x_priority_tier: str = Header(default="standard"),
+    x_optimization_target: str = Header(default="auto"),
     x_budget_sensitivity: float = Header(default=0.5),
 ) -> Any:
     state = _get_app_state(request)
@@ -48,6 +49,14 @@ async def chat_completions(
     except ValueError:
         priority = PriorityTier.STANDARD
 
+    requested_optimization = body.get("routing", {}).get(
+        "optimize_for", x_optimization_target
+    )
+    try:
+        optimization_target = OptimizationTarget(str(requested_optimization).lower())
+    except ValueError:
+        optimization_target = OptimizationTarget.AUTO
+
     # Classify request
     current_rpm = await state.policy_engine.rpm_tracker.current_rpm(x_tenant_id)
     profile = classifier.classify(
@@ -55,6 +64,7 @@ async def chat_completions(
         tenant_id=x_tenant_id,
         app_id=x_app_id,
         priority_tier=priority,
+        optimization_target=optimization_target,
         budget_sensitivity=x_budget_sensitivity,
         current_tenant_rpm=current_rpm,
     )
@@ -85,9 +95,9 @@ async def chat_completions(
     # Record trace
     state.trace_store.record(profile, decision, state.policy_engine.policy.name)
 
-    # Background: lazily activate any profile templates matching this workload
+    # Background: lazily activate only profile templates relevant to this request
     asyncio.create_task(
-        state.profile_manager.maybe_activate_for_workload(profile.workload_type)
+        state.profile_manager.maybe_activate_for_request(profile)
     )
 
     streaming = body.get("stream", False)
@@ -120,6 +130,12 @@ async def chat_completions(
                     "request_id": profile.request_id,
                     "endpoint": endpoint.name,
                     "decision_ms": round(decision.decision_latency_ms, 2),
+                    "optimization_target": profile.optimization_target.value,
+                    "end_user_benefit": (
+                        "faster first token and snappier interaction"
+                        if profile.optimization_target == OptimizationTarget.LATENCY
+                        else "higher sustained throughput and better fleet utilization"
+                    ),
                 }
                 return JSONResponse(content=result)
 

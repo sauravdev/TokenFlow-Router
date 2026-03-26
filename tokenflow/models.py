@@ -46,6 +46,7 @@ class BackendType(str, Enum):
     VLLM = "vllm"       # vLLM PagedAttention — excellent decode throughput, memory-efficient batching
     SGLANG = "sglang"   # SGLang RadixAttention — best for prefix-heavy/shared-prefix (RAG, long context)
     DYNAMO = "dynamo"   # NVIDIA Dynamo — distributed KV-aware routing across worker pools
+    OLLAMA = "ollama"   # Ollama — lightweight local serving, good cold-start and edge deployments
 
 
 class CostClass(str, Enum):
@@ -73,6 +74,12 @@ class WorkloadType(str, Enum):
     DECODE_HEAVY = "decode_heavy"     # short input, long output
     BALANCED = "balanced"             # moderate both
     REASONING = "reasoning"           # complex multi-step
+
+
+class OptimizationTarget(str, Enum):
+    LATENCY = "latency"
+    THROUGHPUT = "throughput"
+    AUTO = "auto"
 
 
 class TokenBand(str, Enum):
@@ -232,6 +239,7 @@ class RequestProfile(BaseModel):
     predicted_output_tokens: int = 256  # estimated if not provided
     priority_tier: PriorityTier = PriorityTier.STANDARD
     latency_class: LatencyClass = LatencyClass.STANDARD
+    optimization_target: OptimizationTarget = OptimizationTarget.AUTO
     budget_sensitivity: float = 0.5  # 0 = ignore cost, 1 = cost critical
     streaming: bool = False
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -259,6 +267,7 @@ class CandidateScore(BaseModel):
     cost_score: float
     queue_score: float
     gpu_affinity_score: float
+    benchmark_score: float
     model_fit_score: float
     reliability_score: float
     estimated_ttft_ms: float
