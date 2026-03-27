@@ -4,6 +4,17 @@
 
 TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo, Ollama) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
 
+## TL;DR
+
+If you run more than one inference stack or GPU tier, TokenFlow Router gives you a single OpenAI-compatible endpoint that can:
+
+- inspect the request shape (**model**, **ISL**, **OSL**, streaming, workload type)
+- inspect the fleet shape (**backend**, **GPU class**, **queue**, **health**, **cost**)
+- apply business policy (**tenant**, **priority**, **budget**, **SLO**)
+- choose the best backend for either **latency** or **throughput**
+
+In plain English: this is the layer that decides whether a request should go to **NIM on H100**, **vLLM on H200**, **SGLang on L40S**, **Dynamo**, or **Ollama** — and explains why.
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        Your Applications                     │
@@ -44,6 +55,18 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 - `Cost per request` across heterogeneous GPU pools
 - Business policy: per-tenant budgets, SLO tiers, GPU affinity rules
 
+## When to use TokenFlow Router
+
+Use it when you have any of these problems:
+
+- the same model exists on multiple backends and you want the router to pick the best one dynamically
+- some traffic cares about **lowest latency**, while other traffic cares about **highest throughput**
+- you have a mixed fleet (B200/H200/H100/L40S/L4/consumer GPUs/CPU) and want requests routed intelligently
+- you need per-tenant budgets, priorities, or GPU access rules
+- you want a single OpenAI-compatible endpoint instead of exposing multiple serving stacks directly
+
+If you only run one backend on one machine, you probably do **not** need this project.
+
 **Supported backends:**
 
 | Backend | Strengths | Telemetry source |
@@ -57,6 +80,29 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 ---
 
 ## Architecture
+
+### Core concepts in plain English
+
+- **HW** = the hardware lane behind an endpoint: GPU class, GPU count, backend type
+- **LLM model** = the requested model name, plus inferred family/size when possible
+- **ISL** = input sequence length (prompt size in tokens)
+- **OSL** = output sequence length (expected generation size in tokens)
+- **Latency mode** = optimize for snappy first token / interactive feel
+- **Throughput mode** = optimize for sustained output and fleet efficiency
+
+A rough intuition:
+- long prompt, short answer → **prefill-heavy**
+- short prompt, long answer → **decode-heavy**
+- reasoning model → prefer more reliable premium lanes
+
+### Example routing decisions
+
+| Request shape | Likely best fit | Why |
+|---|---|---|
+| 70B reasoning model, medium ISL, streaming, `latency` | NIM on H100/H200/B200 | better premium interactive lane, strong headroom |
+| 8B or 70B, short ISL, very long OSL, `throughput` | vLLM or Dynamo on memory-rich GPUs | strong decode throughput and batching |
+| long-context RAG prompt, shorter answer | SGLang | strong prefill / prefix reuse behavior |
+| small local model, cheap offline job | Ollama / economy GPU / CPU lane | lower ops overhead, cheaper lane |
 
 ### Request lifecycle
 
@@ -78,10 +124,10 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
    - Budget caps → maximise cost savings
    - Priority overrides
    - DSL rule matching
-4. Hard constraints filter incompatible endpoints:
+5. Hard constraints filter incompatible endpoints:
    - CPU endpoints: only for BATCH / OFFLINE workloads
    - RTX_LAPTOP: rejected if total tokens > 4096
-5. Decision engine scores every candidate endpoint:
+6. Decision engine scores every candidate endpoint:
    Utility(e) = w_slo * SLOScore(e)
               + w_cost * CostScore(e)
               + w_queue * QueueScore(e)
@@ -90,10 +136,10 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
               + w_reliability * ReliabilityScore(e)
    - `latency` intent favours lower TTFT / lower cold-start risk
    - `throughput` intent favours higher decode/prefill throughput, concurrency, and memory efficiency
-6. Best-scoring endpoint is selected
-7. Request is proxied to the winning endpoint
-8. TTFT and E2E latency are measured and recorded
-9. Routing decision is stored for /explain API
+7. Best-scoring endpoint is selected
+8. Request is proxied to the winning endpoint
+9. TTFT and E2E latency are measured and recorded
+10. Routing decision is stored for /explain API
 ```
 
 ### Workload classification
