@@ -114,14 +114,20 @@ async def chat_completions(
 
             if streaming:
                 await state.profile_manager.record_endpoint_use(endpoint.id)
+                capacity_plan = await state.profile_manager.capacity_plan_for_request(
+                    profile, endpoint.id
+                )
                 return await _stream_response(
-                    request, state, profile, decision, endpoint, body
+                    request, state, profile, decision, endpoint, body, capacity_plan
                 )
             else:
                 result = await state.proxy.forward(
                     endpoint, body, dict(request.headers)
                 )
                 await state.profile_manager.record_endpoint_use(endpoint.id)
+                capacity_plan = await state.profile_manager.capacity_plan_for_request(
+                    profile, endpoint.id
+                )
                 e2e_ms = (time.perf_counter() - t_start) * 1000
                 ACTIVE_REQUESTS.labels(endpoint_name=endpoint.name).dec()
                 state.trace_store.record_actual_latency(
@@ -147,13 +153,21 @@ async def chat_completions(
                         "total_tokens": profile.total_tokens,
                         "workload_type": profile.workload_type.value,
                     },
+                    "capacity_plan": capacity_plan,
                     "end_user_benefit": (
                         "faster first token and snappier interaction"
                         if profile.optimization_target == OptimizationTarget.LATENCY
                         else "higher sustained throughput and better fleet utilization"
                     ),
                 }
-                return JSONResponse(content=result)
+                headers = {
+                    "X-TokenFlow-Active-Backend": endpoint.backend_type.value,
+                    "X-TokenFlow-Active-Endpoint": endpoint.name,
+                    "X-TokenFlow-Turn-Down-Candidates": ",".join(
+                        c["endpoint"] for c in capacity_plan["turn_down_candidates"]
+                    ),
+                }
+                return JSONResponse(content=result, headers=headers)
 
         except Exception as exc:
             ACTIVE_REQUESTS.labels(endpoint_name=endpoint.name).dec()
@@ -191,7 +205,7 @@ async def chat_completions(
     raise HTTPException(status_code=503, detail="Max fallback attempts exceeded.")
 
 
-async def _stream_response(request, state, profile, decision, endpoint, body):
+async def _stream_response(request, state, profile, decision, endpoint, body, capacity_plan):
     """Return a StreamingResponse for SSE."""
     t_start = time.perf_counter()
     ttft_ms = None
@@ -221,6 +235,11 @@ async def _stream_response(request, state, profile, decision, endpoint, body):
         headers={
             "X-TokenFlow-Request-ID": profile.request_id,
             "X-TokenFlow-Endpoint": endpoint.name,
+            "X-TokenFlow-Active-Backend": endpoint.backend_type.value,
+            "X-TokenFlow-Active-Endpoint": endpoint.name,
+            "X-TokenFlow-Turn-Down-Candidates": ",".join(
+                c["endpoint"] for c in capacity_plan["turn_down_candidates"]
+            ),
         },
     )
 

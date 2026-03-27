@@ -344,7 +344,15 @@ Successful non-streaming responses include a `_tokenflow` block with:
 - selected backend and GPU
 - resolved optimization target
 - request shape summary (`llm_model`, `model_family`, `model_size_b`, `isl_tokens`, `osl_tokens`, `total_tokens`)
+- `capacity_plan`, including:
+  - `active_backend`
+  - `turn_down_candidates`
 - a short end-user benefit explanation
+
+The gateway also exposes lightweight response headers for external callers:
+- `X-TokenFlow-Active-Backend`
+- `X-TokenFlow-Active-Endpoint`
+- `X-TokenFlow-Turn-Down-Candidates`
 
 ---
 

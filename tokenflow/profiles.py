@@ -206,6 +206,49 @@ class ProfileManager:
                     template.last_used_at = datetime.utcnow()
                     break
 
+    async def capacity_plan_for_request(
+        self,
+        profile: RequestProfile,
+        selected_endpoint_id: str,
+    ) -> dict[str, Any]:
+        """Describe the active backend and duplicate live lanes that may be turned down."""
+        if self._registry is None:
+            return {
+                "active_backend": None,
+                "turn_down_candidates": [],
+            }
+
+        live = await self._registry.find_by_model(profile.model_requested)
+        selected = next((ep for ep in live if ep.id == selected_endpoint_id), None)
+        candidates: list[dict[str, Any]] = []
+        for ep in live:
+            if ep.id == selected_endpoint_id:
+                continue
+            tel = self._telemetry_store.get(ep.id) if self._telemetry_store is not None else None
+            if tel and (tel.active_requests > 0 or tel.queue_depth > 0):
+                continue
+            candidates.append(
+                {
+                    "endpoint": ep.name,
+                    "backend": ep.backend_type.value,
+                    "gpu": ep.gpu_name.value,
+                    "reason": "duplicate_model_residency",
+                }
+            )
+
+        return {
+            "active_backend": (
+                {
+                    "endpoint": selected.name,
+                    "backend": selected.backend_type.value,
+                    "gpu": selected.gpu_name.value,
+                }
+                if selected is not None
+                else None
+            ),
+            "turn_down_candidates": candidates,
+        }
+
     async def reconcile_idle_templates(self) -> int:
         """Deactivate templates whose live endpoint has been idle past TTL."""
         async with self._lock:
