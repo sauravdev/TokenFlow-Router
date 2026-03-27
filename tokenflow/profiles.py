@@ -32,6 +32,7 @@ from tokenflow.models import (
     CostClass,
     EndpointRegisterRequest,
     GPUClass,
+    RequestProfile,
     WorkloadType,
 )
 
@@ -71,6 +72,10 @@ class BackendProfileTemplate(BaseModel):
             "Workload types this profile is optimised for. "
             "Empty list means activate for any workload."
         ),
+    )
+    activation_model_names: list[str] = Field(
+        default_factory=list,
+        description="Optional list of model names/families this template may activate for.",
     )
     auto_activate: bool = Field(
         default=True,
@@ -136,11 +141,12 @@ class ProfileManager:
     # Lazy activation
     # ------------------------------------------------------------------
 
-    async def maybe_activate_for_workload(self, workload: WorkloadType) -> None:
+    async def maybe_activate_for_request(self, profile: RequestProfile) -> None:
         """
-        Check if any unactivated templates match this workload.
-        If found and auto_activate=True, activate them in the background.
-        The caller is never blocked.
+        Activate only templates relevant to the incoming request.
+
+        This avoids eagerly spinning every backend for a workload class and helps
+        keep GPU memory pressure down when multiple engines can serve the same model.
         """
         if self._registry is None:
             return
@@ -150,11 +156,19 @@ class ProfileManager:
                 t for t in self._templates.values()
                 if t.auto_activate
                 and not t.activated
-                and (not t.workload_affinity or workload in t.workload_affinity)
+                and (not t.workload_affinity or profile.workload_type in t.workload_affinity)
+                and self._model_matches_template(t, profile.model_requested)
             ]
 
         for template in to_activate:
             asyncio.create_task(self._activate(template))
+
+    @staticmethod
+    def _model_matches_template(template: BackendProfileTemplate, requested_model: str) -> bool:
+        if not template.activation_model_names:
+            return True
+        req = requested_model.lower()
+        return any(req == m.lower() or req.startswith(m.lower()) for m in template.activation_model_names)
 
     async def activate_template(self, template_id: str) -> BackendProfileTemplate | None:
         """Manually activate a specific template (blocking)."""

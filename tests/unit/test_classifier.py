@@ -2,7 +2,7 @@
 
 import pytest
 from tokenflow.classifier import RequestClassifier, _token_band, _count_input_tokens
-from tokenflow.models import LatencyClass, PriorityTier, TokenBand, WorkloadType
+from tokenflow.models import LatencyClass, OptimizationTarget, PriorityTier, TokenBand, WorkloadType
 
 
 clf = RequestClassifier()
@@ -98,3 +98,19 @@ def test_tenant_and_app_id_set():
     profile = clf.classify(body, tenant_id="acme", app_id="chat-app")
     assert profile.tenant_id == "acme"
     assert profile.app_id == "chat-app"
+
+
+def test_auto_optimization_resolves_to_latency_for_streaming():
+    profile = clf.classify(
+        {"model": "llama3", "messages": [{"role": "user", "content": "x"}], "stream": True},
+        optimization_target=OptimizationTarget.AUTO,
+    )
+    assert profile.optimization_target == OptimizationTarget.LATENCY
+
+
+def test_explicit_optimization_target_preserved():
+    profile = clf.classify(
+        {"model": "llama3", "messages": [{"role": "user", "content": "x"}]},
+        optimization_target=OptimizationTarget.THROUGHPUT,
+    )
+    assert profile.optimization_target == OptimizationTarget.THROUGHPUT

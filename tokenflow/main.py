@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
         allow_origins=cors_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Admin-API-Key",
-                       "X-Tenant-ID", "X-App-ID", "X-Priority-Tier", "X-Budget-Sensitivity"],
+                       "X-Tenant-ID", "X-App-ID", "X-Priority-Tier", "X-Optimization-Target", "X-Budget-Sensitivity"],
         allow_credentials=cors_origins != ["*"],
     )
 

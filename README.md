@@ -2,7 +2,7 @@
 
 > **Route every token to the right GPU lane.**
 
-TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
+TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo, Ollama) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -52,6 +52,7 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 | **vLLM** (PagedAttention) | Decode-heavy, high throughput | `/metrics` (`vllm:` prefix) |
 | **SGLang** (RadixAttention) | Prefill-heavy, KV cache reuse | `/get_server_info` |
 | **Dynamo** (disaggregated) | Both prefill + decode, KV transfer | `/metrics` (`vllm:` + `dynamo:` prefix) |
+| **Ollama** | Edge/local deployments, low operational overhead | health + lightweight capability probing |
 
 ---
 
@@ -67,6 +68,7 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
    - classifies workload: prefill_heavy / decode_heavy / balanced / reasoning
    - assigns token bands: tiny / small / medium / large / xlarge
    - sets latency class: interactive / standard / batch / offline
+   - resolves user routing intent: `latency` or `throughput` (via `routing.optimize_for` or `X-Optimization-Target`)
 3. Policy engine applies tenant rules:
    - RPM throttling → demote to batch
    - Budget caps → maximise cost savings
@@ -79,9 +81,11 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
    Utility(e) = w_slo * SLOScore(e)
               + w_cost * CostScore(e)
               + w_queue * QueueScore(e)
-              + w_gpu * GPUAffinityScore(e)   ← GPU tier × backend affinity × KV-warm bonus
+              + w_gpu * (AffinityScore(e) + BenchmarkScore(e)) / 2
               + w_model * ModelFitScore(e)
               + w_reliability * ReliabilityScore(e)
+   - `latency` intent favours lower TTFT / lower cold-start risk
+   - `throughput` intent favours higher decode/prefill throughput, concurrency, and memory efficiency
 6. Best-scoring endpoint is selected
 7. Request is proxied to the winning endpoint
 8. TTFT and E2E latency are measured and recorded
@@ -185,10 +189,12 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "x-tenant-id: my-team" \
   -H "x-priority-tier: standard" \
+  -H "x-optimization-target: latency" \
   -d '{
     "model": "meta/llama-3.1-70b-instruct",
     "messages": [{"role": "user", "content": "Hello"}],
-    "max_tokens": 256
+    "max_tokens": 256,
+    "routing": {"optimize_for": "latency"}
   }'
 ```
 

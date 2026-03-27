@@ -18,6 +18,7 @@ from tokenflow.models import (
     EndpointRegisterRequest,
     GPUClass,
     LatencyClass,
+    OptimizationTarget,
     PriorityTier,
     RouteOutcome,
     RoutingPolicy,
@@ -277,6 +278,44 @@ async def test_vllm_preferred_for_decode_heavy():
     s_nim = engine.score(ep_nim, profile)
     s_vllm = engine.score(ep_vllm, profile)
     assert s_vllm.gpu_affinity_score > s_nim.gpu_affinity_score
+
+
+def test_latency_optimization_prefers_nim_over_vllm_for_balanced_interactive():
+    ep_nim = make_ep("nim", backend=BackendType.NIM, gpu=GPUClass.L40S)
+    ep_vllm = make_ep("vllm", backend=BackendType.VLLM, gpu=GPUClass.L40S)
+    store = fresh_store()
+    engine = ScoringEngine(RoutingPolicy(), store)
+    profile = clf.classify(
+        body(),
+        optimization_target=OptimizationTarget.LATENCY,
+    )
+    s_nim = engine.score(ep_nim, profile)
+    s_vllm = engine.score(ep_vllm, profile)
+    assert s_nim.benchmark_score >= s_vllm.benchmark_score
+
+
+def test_throughput_optimization_prefers_vllm_over_nim_for_decode_heavy():
+    ep_nim = make_ep("nim", backend=BackendType.NIM, gpu=GPUClass.L40S)
+    ep_vllm = make_ep("vllm", backend=BackendType.VLLM, gpu=GPUClass.L40S)
+    store = fresh_store()
+    engine = ScoringEngine(RoutingPolicy(), store)
+    profile = clf.classify(
+        {"model": "meta/llama-3.1-8b-instruct", "messages": [{"role": "user", "content": "hi"}], "max_tokens": 2000},
+        optimization_target=OptimizationTarget.THROUGHPUT,
+    )
+    s_nim = engine.score(ep_nim, profile)
+    s_vllm = engine.score(ep_vllm, profile)
+    assert s_vllm.benchmark_score > s_nim.benchmark_score
+
+
+def test_ollama_supported_as_backend_type():
+    ep_ollama = make_ep("ollama", backend=BackendType.OLLAMA, gpu=GPUClass.RTX4090)
+    store = fresh_store()
+    engine = ScoringEngine(RoutingPolicy(), store)
+    profile = clf.classify(body(), optimization_target=OptimizationTarget.LATENCY)
+    score = engine.score(ep_ollama, profile)
+    assert score.endpoint_name == "ollama"
+    assert score.benchmark_score >= 0.0
 
 
 @pytest.mark.asyncio

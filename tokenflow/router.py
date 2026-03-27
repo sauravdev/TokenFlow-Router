@@ -11,6 +11,8 @@ import math
 import time
 from typing import Optional
 
+from tokenflow.benchmarks import benchmark_score, get_backend_benchmark
+
 import structlog
 
 from tokenflow.models import (
@@ -96,6 +98,12 @@ _BACKEND_AFFINITY: dict[BackendType, dict[WorkloadType, float]] = {
         WorkloadType.DECODE_HEAVY:  0.95,  # Dedicated decode workers
         WorkloadType.BALANCED:      0.90,
         WorkloadType.REASONING:     0.85,
+    },
+    BackendType.OLLAMA: {
+        WorkloadType.PREFILL_HEAVY: 0.65,
+        WorkloadType.DECODE_HEAVY: 0.60,
+        WorkloadType.BALANCED: 0.72,
+        WorkloadType.REASONING: 0.55,
     },
 }
 
@@ -274,6 +282,23 @@ class ScoringEngine:
         combined = max(sat, queue_pressure)
         return 1.0 - combined
 
+    def benchmark_score(self, ep: EndpointProfile, req: RequestProfile) -> float:
+        score = benchmark_score(
+            ep.backend_type,
+            req.workload_type,
+            req.optimization_target,
+        )
+
+        if req.optimization_target.value == "latency":
+            bench = get_backend_benchmark(ep.backend_type)
+            # Penalize cold starts for interactive requests unless operator marks endpoint warm.
+            warm = bool(ep.capability_flags.get("warm", False))
+            if not warm and req.latency_class == LatencyClass.INTERACTIVE:
+                penalty = min(bench.cold_start_penalty_ms / 4000.0, 0.35)
+                score -= penalty
+
+        return _clamp(score)
+
     def gpu_affinity_score(
         self, ep: EndpointProfile, req: RequestProfile
     ) -> float:
@@ -378,6 +403,7 @@ class ScoringEngine:
                 cost_score=0.0,
                 queue_score=0.0,
                 gpu_affinity_score=0.0,
+                benchmark_score=0.0,
                 model_fit_score=0.0,
                 reliability_score=0.0,
                 estimated_ttft_ms=9999.0,
@@ -392,6 +418,7 @@ class ScoringEngine:
         cost_s, est_cost = self.cost_score(ep, req)
         queue_s = self.queue_score(ep)
         gpu_s = self.gpu_affinity_score(ep, req)
+        benchmark_s = self.benchmark_score(ep, req)
         model_s = self.model_fit_score(ep, req)
         rel_s = self.reliability_score(ep)
 
@@ -400,7 +427,8 @@ class ScoringEngine:
             p.slo_weight * slo_s
             + p.cost_weight * cost_s
             + p.queue_weight * queue_s
-            + p.gpu_affinity_weight * gpu_s
+            + (p.gpu_affinity_weight * 0.5) * gpu_s
+            + (p.gpu_affinity_weight * 0.5) * benchmark_s
             + p.model_fit_weight * model_s
             + p.reliability_weight * rel_s
         )
@@ -413,6 +441,7 @@ class ScoringEngine:
             cost_score=cost_s,
             queue_score=queue_s,
             gpu_affinity_score=gpu_s,
+            benchmark_score=benchmark_s,
             model_fit_score=model_s,
             reliability_score=rel_s,
             estimated_ttft_ms=est_ttft,

@@ -8,6 +8,7 @@ import structlog
 
 from tokenflow.models import (
     LatencyClass,
+    OptimizationTarget,
     PriorityTier,
     RequestProfile,
     TokenBand,
@@ -156,6 +157,18 @@ def _burst_class(rpm: float) -> str:
     return "normal"
 
 
+def _resolve_optimization_target(
+    requested: OptimizationTarget,
+    streaming: bool,
+    workload_type: WorkloadType,
+) -> OptimizationTarget:
+    if requested != OptimizationTarget.AUTO:
+        return requested
+    if streaming or workload_type in (WorkloadType.PREFILL_HEAVY, WorkloadType.REASONING):
+        return OptimizationTarget.LATENCY
+    return OptimizationTarget.THROUGHPUT
+
+
 class RequestClassifier:
     """
     Classifies an incoming request into a RequestProfile.
@@ -174,6 +187,7 @@ class RequestClassifier:
         tenant_id: str = "default",
         app_id: str = "default",
         priority_tier: PriorityTier = PriorityTier.STANDARD,
+        optimization_target: OptimizationTarget = OptimizationTarget.AUTO,
         budget_sensitivity: float = 0.5,
         current_tenant_rpm: float = 0.0,
     ) -> RequestProfile:
@@ -185,6 +199,11 @@ class RequestClassifier:
 
         workload_type = _infer_workload_type(input_tokens, predicted_output, model_requested)
         latency_class = _infer_latency_class(priority_tier, streaming, predicted_output)
+        resolved_optimization = _resolve_optimization_target(
+            optimization_target,
+            streaming,
+            workload_type,
+        )
 
         prefill_ratio = input_tokens / max(predicted_output, 1)
         decode_ratio = predicted_output / max(input_tokens, 1)
@@ -197,6 +216,7 @@ class RequestClassifier:
             predicted_output_tokens=predicted_output,
             priority_tier=priority_tier,
             latency_class=latency_class,
+            optimization_target=resolved_optimization,
             budget_sensitivity=budget_sensitivity,
             streaming=streaming,
             workload_type=workload_type,
