@@ -1,11 +1,23 @@
 """Unit tests for the request classifier."""
 
 import pytest
-from tokenflow.classifier import RequestClassifier, _token_band, _count_input_tokens
+from tokenflow.classifier import (
+    RequestClassifier,
+    _count_input_tokens,
+    _infer_model_family,
+    _infer_model_size_b,
+    _token_band,
+)
 from tokenflow.models import LatencyClass, OptimizationTarget, PriorityTier, TokenBand, WorkloadType
 
 
 clf = RequestClassifier()
+
+
+def test_infer_model_family_and_size():
+    assert _infer_model_family("meta/llama-3.1-70b-instruct") == "llama"
+    assert _infer_model_size_b("meta/llama-3.1-70b-instruct") == 70.0
+    assert _infer_model_size_b("foo/bar") is None
 
 
 def test_token_band_boundaries():
@@ -114,3 +126,18 @@ def test_explicit_optimization_target_preserved():
         optimization_target=OptimizationTarget.THROUGHPUT,
     )
     assert profile.optimization_target == OptimizationTarget.THROUGHPUT
+
+
+def test_profile_exposes_model_and_sequence_shape():
+    profile = clf.classify(
+        {
+            "model": "meta/llama-3.1-70b-instruct",
+            "messages": [{"role": "user", "content": "x " * 400}],
+            "max_tokens": 2048,
+        }
+    )
+    assert profile.inferred_model_family == "llama"
+    assert profile.inferred_model_size_b == 70.0
+    assert profile.isl_tokens == profile.input_tokens
+    assert profile.osl_tokens == profile.predicted_output_tokens == 2048
+    assert profile.total_tokens == profile.isl_tokens + profile.osl_tokens

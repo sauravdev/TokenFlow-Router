@@ -24,6 +24,7 @@ from tokenflow.models import (
     EndpointTelemetry,
     GPUClass,
     LatencyClass,
+    OptimizationTarget,
     PriorityTier,
     RequestProfile,
     RouteDecision,
@@ -119,6 +120,23 @@ _DEFAULT_SLO_TTFT_MS = 500.0
 _DEFAULT_SLO_ITL_MS = 50.0
 _DEFAULT_SLO_E2E_MS = 5000.0
 
+_GPU_MEMORY_GB: dict[GPUClass, float] = {
+    GPUClass.B200: 192.0,
+    GPUClass.H200: 141.0,
+    GPUClass.H100: 80.0,
+    GPUClass.A100: 80.0,
+    GPUClass.L40S: 48.0,
+    GPUClass.L40: 48.0,
+    GPUClass.RTX_PRO_6000: 96.0,
+    GPUClass.A10G: 24.0,
+    GPUClass.L4: 24.0,
+    GPUClass.RTX4090: 24.0,
+    GPUClass.RTX_LAPTOP: 12.0,
+    GPUClass.RTX3090: 24.0,
+    GPUClass.CPU: 0.0,
+    GPUClass.UNKNOWN: 24.0,
+}
+
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, val))
@@ -143,6 +161,26 @@ class ScoringEngine:
     # ------------------------------------------------------------------
     # Hard constraint checks
     # ------------------------------------------------------------------
+
+    def _estimated_required_vram_gb(self, req: RequestProfile) -> float:
+        """Very rough fit heuristic from model size + ISL/OSL.
+
+        This is intentionally conservative: it helps avoid routing a large model with
+        long context to hardware that is unlikely to fit or will thrash badly.
+        """
+        model_size_b = req.inferred_model_size_b or 7.0
+        weights_gb = model_size_b * 2.0  # bf16/fp16 rough order-of-magnitude
+        seq_factor = max(req.total_tokens, 1024) / 4096.0
+        kv_cache_gb = max(1.0, seq_factor * max(model_size_b / 14.0, 0.5) * 2.5)
+        activation_overhead_gb = 4.0 if req.optimization_target == OptimizationTarget.LATENCY else 2.0
+        return weights_gb + kv_cache_gb + activation_overhead_gb
+
+    def _hardware_headroom_score(self, ep: EndpointProfile, req: RequestProfile) -> float:
+        total_vram = _GPU_MEMORY_GB.get(ep.gpu_name, 24.0) * max(ep.gpu_count, 1)
+        required_vram = self._estimated_required_vram_gb(req)
+        if required_vram <= 0:
+            return 0.5
+        return _clamp(total_vram / (required_vram * 1.25))
 
     def hard_reject(
         self, ep: EndpointProfile, req: RequestProfile
@@ -192,6 +230,16 @@ class ScoringEngine:
         if ep.gpu_name == GPUClass.RTX_LAPTOP:
             if total_tokens > 4096:
                 return f"rtx_laptop_token_budget_exceeded({total_tokens}>4096)"
+
+        # Hardware fit: reject endpoints that are extremely unlikely to fit the
+        # inferred model size + ISL/OSL working set.
+        total_vram = _GPU_MEMORY_GB.get(ep.gpu_name, 24.0) * max(ep.gpu_count, 1)
+        required_vram = self._estimated_required_vram_gb(req)
+        if total_vram > 0 and required_vram > total_vram * 1.15:
+            return (
+                "insufficient_vram_for_model_and_context"
+                f"({required_vram:.1f}GB>{total_vram:.1f}GB)"
+            )
 
         # Premium tier: only allow cost_class=premium or standard
         if req.priority_tier == PriorityTier.BATCH:
@@ -345,6 +393,22 @@ class ScoringEngine:
 
         combined = gpu_score * backend_affinity
 
+        # Account for inferred hardware fit from model size + request shape (ISL/OSL).
+        headroom = self._hardware_headroom_score(ep, req)
+        combined = combined * (0.75 + 0.25 * headroom)
+
+        # Large-model interactive traffic gets an extra bias toward stronger GPUs.
+        if req.optimization_target == OptimizationTarget.LATENCY and req.inferred_model_size_b:
+            if req.inferred_model_size_b >= 60:
+                combined += (gpu_tier / max_tier) * 0.10
+            elif req.inferred_model_size_b >= 30:
+                combined += (gpu_tier / max_tier) * 0.05
+
+        # Decode-heavy throughput traffic benefits from memory-rich hardware.
+        if req.optimization_target == OptimizationTarget.THROUGHPUT and req.osl_tokens >= 1024:
+            vram_bias = _clamp(_GPU_MEMORY_GB.get(ep.gpu_name, 24.0) / 96.0)
+            combined += vram_bias * 0.08
+
         # KV-cache warm bonus: if this endpoint has a warm prefix cache for the
         # current traffic pattern, reward it — applies for PREFILL_HEAVY workloads
         # where cache hits save meaningful compute.
@@ -357,18 +421,22 @@ class ScoringEngine:
         return _clamp(combined)
 
     def model_fit_score(self, ep: EndpointProfile, req: RequestProfile) -> float:
-        """Exact model match > family match > wildcard."""
+        """Exact model match > family match > wildcard, with hardware-fit awareness."""
         req_lower = req.model_requested.lower()
         served_lower = ep.model_name.lower()
         if served_lower == req_lower:
-            return 1.0
-        # Family prefix match
-        if req_lower and served_lower.startswith(req_lower.split("-")[0]):
-            return 0.75
-        # Wildcard
-        if req.model_requested in ("any", "*", ""):
-            return 0.5
-        return 0.3
+            base = 1.0
+        elif req.inferred_model_family and req.inferred_model_family in served_lower:
+            base = 0.8
+        elif req_lower and served_lower.startswith(req_lower.split("-")[0]):
+            base = 0.75
+        elif req.model_requested in ("any", "*", ""):
+            base = 0.5
+        else:
+            base = 0.3
+
+        headroom = self._hardware_headroom_score(ep, req)
+        return _clamp(base * (0.8 + 0.2 * headroom))
 
     def reliability_score(self, ep: EndpointProfile) -> float:
         tel = self.store.get(ep.id)

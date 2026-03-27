@@ -35,7 +35,7 @@ TokenFlow Router is an open-source, request-aware policy router that sits in fro
 
 TokenFlow Router is **not** an inference engine or model server. Its job is to answer one question for every incoming request:
 
-> *Given this request shape, this current traffic, this model target, and this GPU fleet state — where should the request go right now?*
+> *Given this request shape, this current traffic, this model target, the request's ISL/OSL, and this GPU fleet state — where should the request go right now?*
 
 **It optimises for:**
 - `TTFT` (time to first token) for interactive/prefill-heavy requests
@@ -63,13 +63,17 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 ```
 1. Request arrives at POST /v1/chat/completions
 2. Classifier enriches the request:
-   - counts input tokens (heuristic: ~4 chars/token)
-   - estimates output tokens (from max_tokens or model hint)
+   - counts input tokens and captures **ISL** (input sequence length)
+   - estimates output tokens and captures **OSL** (output sequence length)
+   - infers the requested **LLM family** and rough **model size** from the model name
    - classifies workload: prefill_heavy / decode_heavy / balanced / reasoning
    - assigns token bands: tiny / small / medium / large / xlarge
    - sets latency class: interactive / standard / batch / offline
    - resolves user routing intent: `latency` or `throughput` (via `routing.optimize_for` or `X-Optimization-Target`)
-3. Policy engine applies tenant rules:
+3. Router evaluates endpoint **hardware fit** before scoring:
+   - checks GPU class / VRAM headroom against inferred model size + ISL/OSL working set
+   - rejects lanes that are unlikely to fit the requested model/context efficiently
+4. Policy engine applies tenant rules:
    - RPM throttling → demote to batch
    - Budget caps → maximise cost savings
    - Priority overrides
@@ -100,6 +104,20 @@ TokenFlow Router is **not** an inference engine or model server. Its job is to a
 | `decode_heavy` | output/input > 3 | ITL | vLLM (PagedAttention) |
 | `balanced` | moderate both | E2E + cost | Dynamo or vLLM |
 | `reasoning` | model name hint | E2E reliability | NIM (TensorRT-LLM) |
+
+### Request understanding before backend selection
+
+Before choosing a backend, the router builds a request profile from four core signals:
+
+- **HW**: the registered endpoint hardware (`gpu_name`, `gpu_count`, backend type)
+- **LLM model**: exact model name plus inferred family/size (for example `llama`, `qwen`, `70b`, `8b`)
+- **ISL**: input sequence length in tokens
+- **OSL**: output sequence length in tokens
+
+Those signals are then combined with the user's routing intent:
+
+- **optimize for latency** → favor faster TTFT, stronger hardware headroom, and low cold-start risk
+- **optimize for throughput** → favor higher sustained decode/prefill throughput, concurrency, and memory-efficient backends
 
 ### GPU tier hierarchy
 
@@ -251,7 +269,18 @@ Attach these headers to influence routing per-request:
 | `x-tenant-id` | string | `default` | Tenant identifier for policy lookup |
 | `x-app-id` | string | `default` | Application identifier |
 | `x-priority-tier` | string | `standard` | `premium` / `standard` / `batch` / `offline` |
+| `x-optimization-target` | string | `auto` | `latency` / `throughput` / `auto` |
 | `x-budget-sensitivity` | float 0–1 | `0.5` | 0 = ignore cost, 1 = cost critical |
+
+---
+
+## Response metadata
+
+Successful non-streaming responses include a `_tokenflow` block with:
+- selected backend and GPU
+- resolved optimization target
+- request shape summary (`llm_model`, `model_family`, `model_size_b`, `isl_tokens`, `osl_tokens`, `total_tokens`)
+- a short end-user benefit explanation
 
 ---
 

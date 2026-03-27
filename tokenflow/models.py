@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +250,11 @@ class RequestProfile(BaseModel):
     prefill_ratio: float = 1.0
     decode_ratio: float = 1.0
     burst_class: str = "normal"  # normal | burst | spike
+    inferred_model_family: str = "unknown"
+    inferred_model_size_b: float | None = None
+    isl_tokens: int = 0
+    osl_tokens: int = 0
+    total_tokens: int = 0
     # Raw request (for forwarding)
     raw_body: dict[str, Any] = Field(default_factory=dict)
 

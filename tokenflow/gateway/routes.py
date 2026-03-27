@@ -129,8 +129,19 @@ async def chat_completions(
                 result["_tokenflow"] = {
                     "request_id": profile.request_id,
                     "endpoint": endpoint.name,
+                    "backend": endpoint.backend_type.value,
+                    "gpu": endpoint.gpu_name.value,
                     "decision_ms": round(decision.decision_latency_ms, 2),
                     "optimization_target": profile.optimization_target.value,
+                    "request_shape": {
+                        "llm_model": profile.model_requested,
+                        "model_family": profile.inferred_model_family,
+                        "model_size_b": profile.inferred_model_size_b,
+                        "isl_tokens": profile.isl_tokens,
+                        "osl_tokens": profile.osl_tokens,
+                        "total_tokens": profile.total_tokens,
+                        "workload_type": profile.workload_type.value,
+                    },
                     "end_user_benefit": (
                         "faster first token and snappier interaction"
                         if profile.optimization_target == OptimizationTarget.LATENCY

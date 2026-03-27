@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import structlog
@@ -43,6 +44,7 @@ _LARGE_MAX = 16_384
 # Prefill/decode classification thresholds
 _PREFILL_HEAVY_RATIO = 3.0   # input_tokens / output_tokens > 3 → prefill heavy
 _DECODE_HEAVY_RATIO = 3.0    # output_tokens / input_tokens > 3 → decode heavy
+_MODEL_SIZE_RE = re.compile(r"(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>[bm])\b", re.IGNORECASE)
 
 
 def _token_band(n: int) -> TokenBand:
@@ -157,6 +159,37 @@ def _burst_class(rpm: float) -> str:
     return "normal"
 
 
+def _infer_model_family(model_name: str) -> str:
+    model = model_name.lower()
+    known_families = (
+        "llama",
+        "nemotron",
+        "mistral",
+        "mixtral",
+        "qwen",
+        "deepseek",
+        "gemma",
+        "phi",
+        "gpt",
+    )
+    for family in known_families:
+        if family in model:
+            return family
+    tokens = [t for t in re.split(r"[^a-z0-9]+", model) if t]
+    return tokens[0] if tokens else "unknown"
+
+
+def _infer_model_size_b(model_name: str) -> float | None:
+    match = _MODEL_SIZE_RE.search(model_name)
+    if not match:
+        return None
+    size = float(match.group("size"))
+    unit = match.group("unit").lower()
+    if unit == "m":
+        return round(size / 1000.0, 3)
+    return size
+
+
 def _resolve_optimization_target(
     requested: OptimizationTarget,
     streaming: bool,
@@ -207,6 +240,9 @@ class RequestClassifier:
 
         prefill_ratio = input_tokens / max(predicted_output, 1)
         decode_ratio = predicted_output / max(input_tokens, 1)
+        inferred_model_family = _infer_model_family(model_requested)
+        inferred_model_size_b = _infer_model_size_b(model_requested)
+        total_tokens = input_tokens + predicted_output
 
         profile = RequestProfile(
             tenant_id=tenant_id,
@@ -225,6 +261,11 @@ class RequestClassifier:
             prefill_ratio=prefill_ratio,
             decode_ratio=decode_ratio,
             burst_class=_burst_class(current_tenant_rpm),
+            inferred_model_family=inferred_model_family,
+            inferred_model_size_b=inferred_model_size_b,
+            isl_tokens=input_tokens,
+            osl_tokens=predicted_output,
+            total_tokens=total_tokens,
             raw_body=body,
         )
 

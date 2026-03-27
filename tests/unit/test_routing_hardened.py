@@ -185,6 +185,20 @@ def test_context_window_exceeded_rejection():
     assert "context_exceeded" in score.rejection_reason
 
 
+def test_large_model_rejected_on_small_gpu_when_context_is_long():
+    ep = make_ep(gpu=GPUClass.L4, model="meta/llama-3.1-70b-instruct")
+    store = fresh_store()
+    engine = ScoringEngine(RoutingPolicy(), store)
+    profile = clf.classify({
+        "model": "meta/llama-3.1-70b-instruct",
+        "messages": [{"role": "user", "content": "x " * 2500}],
+        "max_tokens": 2048,
+    })
+    score = engine.score(ep, profile)
+    assert score.hard_rejected
+    assert "insufficient_vram" in score.rejection_reason
+
+
 # ---------------------------------------------------------------------------
 # Stale telemetry
 # ---------------------------------------------------------------------------
@@ -316,6 +330,25 @@ def test_ollama_supported_as_backend_type():
     score = engine.score(ep_ollama, profile)
     assert score.endpoint_name == "ollama"
     assert score.benchmark_score >= 0.0
+
+
+def test_large_model_latency_prefers_bigger_gpu_headroom():
+    ep_l40s = make_ep("l40s", backend=BackendType.NIM, gpu=GPUClass.L40S, model="meta/llama-3.1-70b-instruct")
+    ep_h100 = make_ep("h100", backend=BackendType.NIM, gpu=GPUClass.H100, model="meta/llama-3.1-70b-instruct")
+    store = fresh_store()
+    engine = ScoringEngine(RoutingPolicy(), store)
+    profile = clf.classify(
+        {
+            "model": "meta/llama-3.1-70b-instruct",
+            "messages": [{"role": "user", "content": "Summarise this: " + ("x " * 600)}],
+            "max_tokens": 512,
+            "stream": True,
+        },
+        optimization_target=OptimizationTarget.LATENCY,
+    )
+    s_l40s = engine.score(ep_l40s, profile)
+    s_h100 = engine.score(ep_h100, profile)
+    assert s_h100.gpu_affinity_score > s_l40s.gpu_affinity_score
 
 
 @pytest.mark.asyncio
