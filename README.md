@@ -77,6 +77,8 @@ If you only run one backend on one machine, you probably do **not** need this pr
 | **Dynamo** (disaggregated) | Both prefill + decode, KV transfer | `/metrics` (`vllm:` + `dynamo:` prefix) |
 | **Ollama** | Edge/local deployments, low operational overhead | health + lightweight capability probing |
 
+This guidance is centralized in `tokenflow/benchmarks.py` so the router, dormant-template activator, tests, and docs all use the same backend-strength matrix instead of drifting separately.
+
 ---
 
 ## Architecture

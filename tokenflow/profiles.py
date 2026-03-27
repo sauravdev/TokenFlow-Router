@@ -29,6 +29,7 @@ from typing import Any
 import structlog
 from pydantic import BaseModel, Field
 
+from tokenflow.benchmarks import backend_affinity
 from tokenflow.models import (
     BackendType,
     CostClass,
@@ -451,39 +452,7 @@ class ProfileManager:
             score += 1.0
 
         # Backend affinity by workload and user intent.
-        affinity = {
-            BackendType.NIM: {
-                WorkloadType.REASONING: 1.0,
-                WorkloadType.PREFILL_HEAVY: 0.9,
-                WorkloadType.BALANCED: 0.8,
-                WorkloadType.DECODE_HEAVY: 0.7,
-            },
-            BackendType.VLLM: {
-                WorkloadType.REASONING: 0.75,
-                WorkloadType.PREFILL_HEAVY: 0.7,
-                WorkloadType.BALANCED: 0.85,
-                WorkloadType.DECODE_HEAVY: 1.0,
-            },
-            BackendType.SGLANG: {
-                WorkloadType.REASONING: 0.7,
-                WorkloadType.PREFILL_HEAVY: 1.0,
-                WorkloadType.BALANCED: 0.85,
-                WorkloadType.DECODE_HEAVY: 0.75,
-            },
-            BackendType.DYNAMO: {
-                WorkloadType.REASONING: 0.85,
-                WorkloadType.PREFILL_HEAVY: 0.95,
-                WorkloadType.BALANCED: 0.9,
-                WorkloadType.DECODE_HEAVY: 0.95,
-            },
-            BackendType.OLLAMA: {
-                WorkloadType.REASONING: 0.5,
-                WorkloadType.PREFILL_HEAVY: 0.6,
-                WorkloadType.BALANCED: 0.7,
-                WorkloadType.DECODE_HEAVY: 0.65,
-            },
-        }
-        score += affinity[template.backend_type][profile.workload_type] * 3.0
+        score += backend_affinity(template.backend_type, profile.workload_type) * 3.0
 
         vram = _GPU_MEMORY_GB.get(template.gpu_name, 24.0) * max(template.gpu_count, 1)
         score += min(vram / 80.0, 2.0)

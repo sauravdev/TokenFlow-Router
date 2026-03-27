@@ -11,7 +11,7 @@ import math
 import time
 from typing import Optional
 
-from tokenflow.benchmarks import benchmark_score, get_backend_benchmark
+from tokenflow.benchmarks import backend_affinity, benchmark_score, get_backend_benchmark
 
 import structlog
 
@@ -67,45 +67,6 @@ _GPU_TIER: dict[GPUClass, int] = {
     GPUClass.RTX3090: 1,
     GPUClass.CPU: 0,
     GPUClass.UNKNOWN: 2,
-}
-
-# Backend affinity multipliers per workload type.
-# These reflect each backend's architectural strengths:
-#   NIM   (TensorRT-LLM) — fused kernels, best for reasoning + structured prefill
-#   vLLM  (PagedAttention) — memory-efficient batching, best for decode-heavy / long output
-#   SGLang (RadixAttention) — prefix cache reuse, best for prefill-heavy / shared prompts
-#   Dynamo (disaggregated) — KV-transfer across nodes, strong for both when KV-warm
-_BACKEND_AFFINITY: dict[BackendType, dict[WorkloadType, float]] = {
-    BackendType.NIM: {
-        WorkloadType.REASONING:    1.00,  # TRT-LLM fused attention + speculative decoding
-        WorkloadType.PREFILL_HEAVY: 0.90,  # Very fast prefill via TRT-LLM
-        WorkloadType.BALANCED:     0.80,
-        WorkloadType.DECODE_HEAVY: 0.70,  # Capable but vLLM/Dynamo edge it here
-    },
-    BackendType.VLLM: {
-        WorkloadType.DECODE_HEAVY:  1.00,  # PagedAttention = most memory-efficient long decode
-        WorkloadType.BALANCED:      0.85,
-        WorkloadType.PREFILL_HEAVY: 0.70,
-        WorkloadType.REASONING:     0.75,
-    },
-    BackendType.SGLANG: {
-        WorkloadType.PREFILL_HEAVY: 1.00,  # RadixAttention prefix cache — skip repeated prefill
-        WorkloadType.BALANCED:      0.85,
-        WorkloadType.DECODE_HEAVY:  0.75,
-        WorkloadType.REASONING:     0.70,  # Good but no speculative decoding advantage
-    },
-    BackendType.DYNAMO: {
-        WorkloadType.PREFILL_HEAVY: 0.95,  # Disaggregated prefill pool + KV transfer
-        WorkloadType.DECODE_HEAVY:  0.95,  # Dedicated decode workers
-        WorkloadType.BALANCED:      0.90,
-        WorkloadType.REASONING:     0.85,
-    },
-    BackendType.OLLAMA: {
-        WorkloadType.PREFILL_HEAVY: 0.65,
-        WorkloadType.DECODE_HEAVY: 0.60,
-        WorkloadType.BALANCED: 0.72,
-        WorkloadType.REASONING: 0.55,
-    },
 }
 
 # Cost tier ordering — lower = cheaper per GPU-hour
@@ -387,11 +348,9 @@ class ScoringEngine:
             gpu_score = gpu_tier / max_tier * 0.8
 
         # Backend affinity multiplier
-        backend_affinity = _BACKEND_AFFINITY.get(
-            ep.backend_type, {WorkloadType.BALANCED: 0.5}
-        ).get(req.workload_type, 0.6)
+        affinity = backend_affinity(ep.backend_type, req.workload_type)
 
-        combined = gpu_score * backend_affinity
+        combined = gpu_score * affinity
 
         # Account for inferred hardware fit from model size + request shape (ISL/OSL).
         headroom = self._hardware_headroom_score(ep, req)
