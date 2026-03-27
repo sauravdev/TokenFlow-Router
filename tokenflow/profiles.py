@@ -112,6 +112,16 @@ class BackendProfileTemplate(BaseModel):
         ge=60,
         description="Deactivate the template after this many idle seconds.",
     )
+    min_live_seconds: int = Field(
+        default=180,
+        ge=0,
+        description="Minimum dwell time after activation before deactivation is allowed.",
+    )
+    deactivation_buffer_seconds: int = Field(
+        default=120,
+        ge=0,
+        description="Additional quiet-time buffer after idle TTL before deactivation.",
+    )
 
     # State
     activated: bool = False
@@ -152,6 +162,8 @@ class ProfileManager:
                 workload_affinity=[w.value for w in template.workload_affinity],
                 exclusive_model_residency=template.exclusive_model_residency,
                 idle_ttl_seconds=template.idle_ttl_seconds,
+                min_live_seconds=template.min_live_seconds,
+                deactivation_buffer_seconds=template.deactivation_buffer_seconds,
             )
             return template
 
@@ -221,12 +233,18 @@ class ProfileManager:
 
         live = await self._registry.find_by_model(profile.model_requested)
         selected = next((ep for ep in live if ep.id == selected_endpoint_id), None)
+        template_by_endpoint = {
+            t.activated_endpoint_id: t
+            for t in await self.list_templates()
+            if t.activated_endpoint_id
+        }
         candidates: list[dict[str, Any]] = []
         for ep in live:
             if ep.id == selected_endpoint_id:
                 continue
-            tel = self._telemetry_store.get(ep.id) if self._telemetry_store is not None else None
-            if tel and (tel.active_requests > 0 or tel.queue_depth > 0):
+            template = template_by_endpoint.get(ep.id)
+            eligible = await self._eligible_for_deactivation(template) if template else False
+            if not eligible:
                 continue
             candidates.append(
                 {
@@ -234,6 +252,11 @@ class ProfileManager:
                     "backend": ep.backend_type.value,
                     "gpu": ep.gpu_name.value,
                     "reason": "duplicate_model_residency",
+                    "buffered_by": {
+                        "idle_ttl_seconds": template.idle_ttl_seconds,
+                        "min_live_seconds": template.min_live_seconds,
+                        "deactivation_buffer_seconds": template.deactivation_buffer_seconds,
+                    } if template else None,
                 }
             )
 
@@ -250,25 +273,37 @@ class ProfileManager:
             "turn_down_candidates": candidates,
         }
 
+    async def _eligible_for_deactivation(self, template: BackendProfileTemplate | None) -> bool:
+        if template is None or not template.activated or not template.activated_endpoint_id:
+            return False
+
+        now = datetime.utcnow()
+        last_used = template.last_used_at or template.activated_at or template.created_at
+        activated_at = template.activated_at or template.created_at
+
+        if now - activated_at < timedelta(seconds=template.min_live_seconds):
+            return False
+
+        quiet_window = template.idle_ttl_seconds + template.deactivation_buffer_seconds
+        if now - last_used < timedelta(seconds=quiet_window):
+            return False
+
+        if self._telemetry_store is not None:
+            tel = self._telemetry_store.get(template.activated_endpoint_id)
+            if tel and (tel.active_requests > 0 or tel.queue_depth > 0):
+                return False
+
+        return True
+
     async def reconcile_idle_templates(self) -> int:
-        """Deactivate templates whose live endpoint has been idle past TTL."""
+        """Deactivate templates whose live endpoint has been idle past TTL + buffer."""
         async with self._lock:
             templates = list(self._templates.values())
 
         deactivated = 0
-        now = datetime.utcnow()
         for template in templates:
-            if not template.activated or not template.activated_endpoint_id:
+            if not await self._eligible_for_deactivation(template):
                 continue
-            last_used = template.last_used_at or template.activated_at or template.created_at
-            if now - last_used < timedelta(seconds=template.idle_ttl_seconds):
-                continue
-
-            if self._telemetry_store is not None:
-                tel = self._telemetry_store.get(template.activated_endpoint_id)
-                if tel and (tel.active_requests > 0 or tel.queue_depth > 0):
-                    continue
-
             await self._deactivate(template)
             deactivated += 1
 

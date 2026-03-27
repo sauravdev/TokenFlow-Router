@@ -366,6 +366,7 @@ Profile templates let you register **available but dormant** backends. TokenFlow
 - activate the best matching backend template when a request arrives
 - prefer a single backend for a model/workload instead of activating everything
 - deactivate idle templates after a TTL so duplicate model copies do not stay live unnecessarily
+- keep a built-in **hysteresis buffer** between activation and deactivation so real-time traffic is less likely to flap endpoints up/down
 
 ### Example: keep only the needed backend active
 
@@ -383,11 +384,20 @@ curl -X POST http://localhost:8080/admin/profiles \
     "activation_model_names": ["meta/llama-3.1-70b-instruct", "llama"],
     "workload_affinity": ["balanced", "decode_heavy"],
     "exclusive_model_residency": true,
-    "idle_ttl_seconds": 900
+    "idle_ttl_seconds": 900,
+    "min_live_seconds": 180,
+    "deactivation_buffer_seconds": 120
   }'
 ```
 
 With `exclusive_model_residency=true`, activating this template can deactivate sibling templates for the same model family so TokenFlow does not keep multiple live copies by default.
+
+To avoid deactivation impacting real-time traffic, templates now support a built-in buffer:
+- `idle_ttl_seconds` — how long the endpoint must be idle before deactivation is even considered
+- `min_live_seconds` — minimum dwell time after activation before shutdown is allowed
+- `deactivation_buffer_seconds` — extra quiet period added on top of idle TTL before shutdown
+
+Deactivation also refuses to proceed if telemetry still shows active requests or queued work.
 
 ### Sample external controller
 

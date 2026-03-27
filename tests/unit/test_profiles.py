@@ -1,5 +1,7 @@
 """Unit tests for dynamic backend profile orchestration."""
 
+from datetime import datetime, timedelta
+
 from tokenflow.classifier import RequestClassifier
 from tokenflow.models import BackendType, CostClass, EndpointProfile, EndpointRegisterRequest, GPUClass
 from tokenflow.profiles import BackendProfileTemplate, ProfileManager
@@ -104,3 +106,30 @@ async def test_exclusive_model_residency_deactivates_siblings():
 
     assert (await manager.get_template(dynamo.id)).activated is True
     assert (await manager.get_template(sglang.id)).activated is False
+
+
+async def test_deactivation_respects_min_live_and_buffer_windows():
+    manager = await _setup_manager()
+    template = make_template("vllm-h200", BackendType.VLLM, GPUClass.H100, "meta/llama-3.1-8b-instruct")
+    template.idle_ttl_seconds = 60
+    template.min_live_seconds = 120
+    template.deactivation_buffer_seconds = 30
+    await manager.add_template(template)
+    await manager.activate_template(template.id)
+
+    live = await manager.get_template(template.id)
+    assert live is not None
+
+    # Too soon after activation: protected by min_live_seconds.
+    live.activated_at = datetime.utcnow() - timedelta(seconds=30)
+    live.last_used_at = datetime.utcnow() - timedelta(seconds=500)
+    assert await manager._eligible_for_deactivation(live) is False
+
+    # Past min_live_seconds but still inside idle_ttl + buffer quiet window.
+    live.activated_at = datetime.utcnow() - timedelta(seconds=500)
+    live.last_used_at = datetime.utcnow() - timedelta(seconds=70)
+    assert await manager._eligible_for_deactivation(live) is False
+
+    # Past both windows: can be turned down.
+    live.last_used_at = datetime.utcnow() - timedelta(seconds=100)
+    assert await manager._eligible_for_deactivation(live) is True
