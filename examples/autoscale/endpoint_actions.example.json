@@ -3,33 +3,46 @@
     {
       "template_name": "vllm-h200-llama3-70b-template",
       "backend_type": "vllm",
+      "adapter": "command",
       "model_name": "meta/llama-3.1-70b-instruct",
       "base_url": "http://127.0.0.1:8000",
       "healthcheck_url": "http://127.0.0.1:8000/health",
+      "cooldown_seconds": 30,
+      "required_inactive_polls_before_stop": 3,
+      "failure_backoff_seconds": 60,
       "stop_when_inactive": true
     },
     {
       "template_name": "sglang-h100-llama3-70b-template",
       "backend_type": "sglang",
+      "adapter": "command",
       "model_name": "meta/llama-3.1-70b-instruct",
       "base_url": "http://127.0.0.1:30000",
       "healthcheck_url": "http://127.0.0.1:30000/health",
+      "cooldown_seconds": 30,
+      "required_inactive_polls_before_stop": 3,
+      "failure_backoff_seconds": 60,
       "stop_when_inactive": true
     },
     {
       "template_name": "ollama-8b-template",
       "backend_type": "ollama",
+      "adapter": "command",
       "model_name": "llama3.1:8b",
       "base_url": "http://127.0.0.1:11434",
       "healthcheck_url": "http://127.0.0.1:11434/api/tags",
+      "cooldown_seconds": 20,
+      "required_inactive_polls_before_stop": 2,
       "stop_when_inactive": true
     },
     {
       "template_name": "nim-70b-template",
       "backend_type": "nim",
+      "adapter": "docker",
       "model_name": "meta/llama-3.1-70b-instruct",
       "base_url": "http://127.0.0.1:9000",
       "healthcheck_url": "http://127.0.0.1:9000/v1/health/ready",
+      "docker_container": "nim-70b",
       "start_command": [
         "bash",
         "-lc",
@@ -40,24 +53,33 @@
         "-lc",
         "docker stop nim-70b"
       ],
+      "cooldown_seconds": 60,
+      "required_inactive_polls_before_stop": 6,
       "stop_when_inactive": true
     },
     {
       "template_name": "dynamo-70b-template",
       "backend_type": "dynamo",
+      "adapter": "k8s",
       "model_name": "meta/llama-3.1-70b-instruct",
       "base_url": "http://127.0.0.1:9100",
       "healthcheck_url": "http://127.0.0.1:9100/health",
-      "start_command": [
-        "bash",
-        "-lc",
-        "<your-dynamo-start-command>"
-      ],
-      "stop_command": [
-        "bash",
-        "-lc",
-        "<your-dynamo-stop-command>"
-      ],
+      "kubernetes_deployment": "dynamo-router-70b",
+      "kubernetes_namespace": "inference",
+      "cooldown_seconds": 60,
+      "required_inactive_polls_before_stop": 6,
+      "stop_when_inactive": true
+    },
+    {
+      "template_name": "vllm-systemd-8b-template",
+      "backend_type": "vllm",
+      "adapter": "systemd",
+      "systemd_unit": "tokenflow-vllm-8b.service",
+      "model_name": "meta/llama-3.1-8b-instruct",
+      "base_url": "http://127.0.0.1:8010",
+      "healthcheck_url": "http://127.0.0.1:8010/health",
+      "cooldown_seconds": 20,
+      "required_inactive_polls_before_stop": 3,
       "stop_when_inactive": true
     }
   ]

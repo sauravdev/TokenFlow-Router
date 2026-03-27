@@ -1,46 +1,27 @@
 #!/usr/bin/env python3
 """Sample controller that watches TokenFlow profile flags and starts/stops engines.
 
-This is intentionally a *sample*, not a production autoscaler.
+This is still a sample, but it is intentionally more production-shaped than a
+minimal demo:
 
-What it watches
----------------
-- `/admin/profiles` -> template `activated` state is treated as desired state
-- optional response headers from callers such as:
-  - `X-TokenFlow-Active-Backend`
-  - `X-TokenFlow-Active-Endpoint`
-  - `X-TokenFlow-Turn-Down-Candidates`
-
-What it does
-------------
-- if a profile template becomes `activated`, ensure the corresponding backend
-  process / endpoint is up
-- if a profile template becomes deactivated, stop the corresponding backend
-  if configured to do so
-
-Current engine hooks
---------------------
-- vLLM: default `vllm serve ...` command pattern
-- SGLang: default `python -m sglang.launch_server ...` command pattern
-- Ollama: default `ollama pull` + `ollama stop` pattern
-- NIM / Dynamo: deployment-specific in practice, so this sample expects explicit
-  `start_command` / `stop_command` in config for those engines
+- polls `/admin/profiles` and treats `activated` as desired state
+- supports cooldowns and retry/backoff to avoid flapping
+- supports multiple control adapters: `command`, `systemd`, `docker`, `k8s`
+- optionally protects healthy endpoints from immediate stop actions until a
+  configurable number of inactive polls have been seen
 
 Suggested documentation to verify against in your environment
 -------------------------------------------------------------
 - vLLM OpenAI-compatible server docs
 - SGLang launch/server docs
 - Ollama API / CLI docs
-- NVIDIA NIM getting-started / deployment docs
+- NVIDIA NIM deployment docs
 - NVIDIA Dynamo quickstart / deployment docs
 
-I could not live-fetch those docs from this sandbox while authoring this sample due
-network/DNS restrictions, so treat the built-in defaults as **reference examples**
-and verify the exact commands/flags against the latest vendor docs before running
-outside a dev environment.
-
-Because deployment topologies vary wildly, the safest interface is a config file
-that maps TokenFlow template names to concrete engine commands.
+I could not live-fetch those docs from this sandbox because external DNS/network
+was unavailable while authoring this sample, so treat the default commands as
+reference examples and verify exact flags against the latest vendor docs before
+running in production.
 """
 
 from __future__ import annotations
@@ -54,7 +35,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -64,12 +45,33 @@ class EngineTarget:
     backend_type: str
     model_name: str
     base_url: str
+    adapter: str = "command"  # command | systemd | docker | k8s
     start_command: list[str] | None = None
     stop_command: list[str] | None = None
     healthcheck_url: str | None = None
     working_dir: str | None = None
     env: dict[str, str] | None = None
     stop_when_inactive: bool = True
+    cooldown_seconds: int = 30
+    max_start_retries: int = 3
+    failure_backoff_seconds: int = 60
+    required_inactive_polls_before_stop: int = 3
+    protect_healthy_from_stop: bool = True
+
+    # adapter-specific knobs
+    systemd_unit: str | None = None
+    docker_container: str | None = None
+    kubernetes_deployment: str | None = None
+    kubernetes_namespace: str = "default"
+
+
+@dataclass
+class RuntimeState:
+    last_action_at: float = 0.0
+    last_start_failure_at: float = 0.0
+    consecutive_start_failures: int = 0
+    inactive_polls: int = 0
+    last_desired_active: bool | None = None
 
 
 class TokenFlowCapacityController:
@@ -89,7 +91,7 @@ class TokenFlowCapacityController:
             item["template_name"]: EngineTarget(**item)
             for item in config["targets"]
         }
-        self.processes: dict[str, subprocess.Popen] = {}
+        self.state = {name: RuntimeState() for name in self.targets}
 
     def run_forever(self) -> None:
         print("Starting TokenFlow capacity controller")
@@ -117,25 +119,66 @@ class TokenFlowCapacityController:
                 continue
 
             desired_active = bool(profile.get("activated", False))
-            if desired_active:
-                self.ensure_running(target, profile)
-            elif target.stop_when_inactive:
-                self.ensure_stopped(target, profile)
+            runtime = self.state[template_name]
+            runtime.last_desired_active = desired_active
 
-    def ensure_running(self, target: EngineTarget, profile: dict[str, Any]) -> None:
+            if desired_active:
+                runtime.inactive_polls = 0
+                self.ensure_running(target, profile, runtime)
+            elif target.stop_when_inactive:
+                runtime.inactive_polls += 1
+                self.ensure_stopped(target, profile, runtime)
+
+    def ensure_running(
+        self,
+        target: EngineTarget,
+        profile: dict[str, Any],
+        runtime: RuntimeState,
+    ) -> None:
         if self.healthcheck_ok(target):
+            runtime.consecutive_start_failures = 0
             return
+        if self.in_cooldown(runtime, target.cooldown_seconds):
+            return
+        if runtime.consecutive_start_failures >= target.max_start_retries:
+            if time.time() - runtime.last_start_failure_at < target.failure_backoff_seconds:
+                return
+            runtime.consecutive_start_failures = 0
+
         cmd = self.render_command(target, profile, action="start")
         if not cmd:
             print(f"[warn] no start command for {target.template_name}")
             return
-        self.exec_command(cmd, target, prefix="start")
 
-    def ensure_stopped(self, target: EngineTarget, profile: dict[str, Any]) -> None:
+        ok = self.exec_command(cmd, target, prefix="start")
+        runtime.last_action_at = time.time()
+        if ok:
+            runtime.consecutive_start_failures = 0
+        else:
+            runtime.consecutive_start_failures += 1
+            runtime.last_start_failure_at = time.time()
+
+    def ensure_stopped(
+        self,
+        target: EngineTarget,
+        profile: dict[str, Any],
+        runtime: RuntimeState,
+    ) -> None:
+        if runtime.inactive_polls < target.required_inactive_polls_before_stop:
+            return
+        if self.in_cooldown(runtime, target.cooldown_seconds):
+            return
+        if target.protect_healthy_from_stop and not self.healthcheck_ok(target):
+            # Already down or not reachable: avoid unnecessary stop calls.
+            return
+
         cmd = self.render_command(target, profile, action="stop")
         if not cmd:
             return
-        self.exec_command(cmd, target, prefix="stop")
+        ok = self.exec_command(cmd, target, prefix="stop")
+        if ok:
+            runtime.last_action_at = time.time()
+            runtime.inactive_polls = 0
 
     def healthcheck_ok(self, target: EngineTarget) -> bool:
         if not target.healthcheck_url:
@@ -145,6 +188,10 @@ class TokenFlowCapacityController:
                 return 200 <= resp.status < 300
         except Exception:
             return False
+
+    @staticmethod
+    def in_cooldown(runtime: RuntimeState, cooldown_seconds: int) -> bool:
+        return runtime.last_action_at and (time.time() - runtime.last_action_at < cooldown_seconds)
 
     def render_command(
         self,
@@ -159,9 +206,33 @@ class TokenFlowCapacityController:
             "template_name": target.template_name,
             "backend": target.backend_type,
             "gpu": profile.get("gpu_name", "UNKNOWN"),
+            "systemd_unit": target.systemd_unit or "",
+            "docker_container": target.docker_container or "",
+            "kubernetes_deployment": target.kubernetes_deployment or "",
+            "kubernetes_namespace": target.kubernetes_namespace,
         }
         if explicit:
             return [part.format(**variables) for part in explicit]
+
+        if target.adapter == "systemd" and target.systemd_unit:
+            return ["systemctl", action, target.systemd_unit]
+
+        if target.adapter == "docker" and target.docker_container:
+            if action == "start":
+                return ["docker", "start", target.docker_container]
+            return ["docker", "stop", target.docker_container]
+
+        if target.adapter == "k8s" and target.kubernetes_deployment:
+            replicas = "1" if action == "start" else "0"
+            return [
+                "kubectl",
+                "scale",
+                f"deployment/{target.kubernetes_deployment}",
+                "--replicas",
+                replicas,
+                "-n",
+                target.kubernetes_namespace,
+            ]
 
         if action == "start":
             if target.backend_type == "vllm":
@@ -188,32 +259,44 @@ class TokenFlowCapacityController:
                 ]
             if target.backend_type == "ollama":
                 return ["ollama", "pull", target.model_name]
-            # NIM and Dynamo are usually deployment-specific (docker/k8s/helm/systemd)
             return None
 
         if action == "stop":
             if target.backend_type == "ollama":
                 return ["ollama", "stop", target.model_name]
-            # For vLLM/SGLang/NIM/Dynamo, stop hooks are highly deployment-specific.
             return None
 
         return None
 
-    def exec_command(self, cmd: list[str], target: EngineTarget, prefix: str) -> None:
+    def exec_command(self, cmd: list[str], target: EngineTarget, prefix: str) -> bool:
         pretty = shlex.join(cmd)
         print(f"[{prefix}] {target.template_name}: {pretty}")
         if self.dry_run:
-            return
+            return True
         env = os.environ.copy()
         if target.env:
             env.update(target.env)
-        subprocess.Popen(
-            cmd,
-            cwd=target.working_dir,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=target.working_dir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+        except Exception as exc:
+            print(f"[warn] command failed to launch for {target.template_name}: {exc}")
+            return False
+
+        if completed.returncode != 0:
+            print(
+                f"[warn] command failed for {target.template_name}: rc={completed.returncode} stderr={completed.stderr.strip()}",
+                file=sys.stderr,
+            )
+            return False
+        return True
 
     @staticmethod
     def _port_from_url(url: str) -> str:

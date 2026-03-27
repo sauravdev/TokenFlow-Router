@@ -395,6 +395,16 @@ A sample controller is included at:
 
 It polls `/admin/profiles`, treats each template's `activated` flag as desired state, and maps that into engine-specific start/stop hooks.
 
+The sample now includes:
+- cooldown windows to avoid flapping
+- retry / backoff for failed starts
+- stop protection via multiple inactive polls before shutdown
+- adapters for:
+  - raw commands
+  - `systemd`
+  - Docker
+  - Kubernetes (`kubectl scale`)
+
 Example:
 
 ```bash
