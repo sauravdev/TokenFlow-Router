@@ -2,26 +2,28 @@
 Dynamic backend profile management.
 
 Allows pre-defining backend profile *templates* that are lazily activated
-when matching workload types are detected. The current request is never
-delayed — activation happens asynchronously in the background, making the
-new endpoint available for subsequent requests.
+when matching workload types are detected. The current implementation now
+supports three important behaviors:
 
-Usage:
-  1. Register a profile template via POST /admin/profiles
-  2. Set workload_affinity to the WorkloadType(s) it should serve
-  3. When a request with a matching workload arrives, the profile is
-     automatically activated (endpoint registered) in the background
+1. **Dormant backend catalog** — templates describe backends that may exist but
+   are not currently running/registered.
+2. **Single-owner model residency** — when enabled, activating a template can
+   deactivate sibling templates for the same model so the router does not keep
+   duplicate live copies everywhere by default.
+3. **Idle deactivation** — activated templates can be unregistered after a period
+   of inactivity so only the needed backend stays live.
 
-This lets operators define backend diversity without pre-spinning every
-endpoint — e.g. only spin up an SGLang profile when the first
-prefill-heavy request arrives.
+This is intentionally lightweight orchestration: TokenFlow does not yet launch
+containers or VM instances itself, but it can control which endpoint templates
+become active in the routing plane, which is the repo's current abstraction for
+"start only what is needed".
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import structlog
@@ -32,19 +34,38 @@ from tokenflow.models import (
     CostClass,
     EndpointRegisterRequest,
     GPUClass,
+    OptimizationTarget,
     RequestProfile,
     WorkloadType,
 )
 
 logger = structlog.get_logger(__name__)
 
+_GPU_MEMORY_GB: dict[GPUClass, float] = {
+    GPUClass.B200: 192.0,
+    GPUClass.H200: 141.0,
+    GPUClass.H100: 80.0,
+    GPUClass.A100: 80.0,
+    GPUClass.L40S: 48.0,
+    GPUClass.L40: 48.0,
+    GPUClass.RTX_PRO_6000: 96.0,
+    GPUClass.A10G: 24.0,
+    GPUClass.L4: 24.0,
+    GPUClass.RTX4090: 24.0,
+    GPUClass.RTX3090: 24.0,
+    GPUClass.RTX_LAPTOP: 12.0,
+    GPUClass.CPU: 0.0,
+    GPUClass.UNKNOWN: 24.0,
+}
+
 
 class BackendProfileTemplate(BaseModel):
     """
     A backend endpoint template that can be activated on-demand.
 
-    When a request with a matching workload type arrives, this template
-    is registered as a live endpoint — without blocking the request.
+    When a request with a matching workload type arrives, this template can be
+    registered as a live endpoint. Templates represent *available capacity*,
+    not necessarily live endpoints.
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -81,33 +102,39 @@ class BackendProfileTemplate(BaseModel):
         default=True,
         description="Automatically activate when a matching request arrives.",
     )
+    exclusive_model_residency: bool = Field(
+        default=True,
+        description="If true, deactivate sibling templates for the same model when this template activates.",
+    )
+    idle_ttl_seconds: int = Field(
+        default=900,
+        ge=60,
+        description="Deactivate the template after this many idle seconds.",
+    )
 
     # State
     activated: bool = False
     activated_endpoint_id: str | None = None
     activated_at: datetime | None = None
+    last_used_at: datetime | None = None
+    activation_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ProfileManager:
-    """
-    Manages backend profile templates and their lazy activation.
-
-    Activation is always non-blocking: it spawns a background asyncio task
-    so the in-flight request sees zero startup delay.
-    """
+    """Manages backend profile templates and their activation/deactivation."""
 
     def __init__(self) -> None:
         self._templates: dict[str, BackendProfileTemplate] = {}
         self._lock = asyncio.Lock()
-        # Set during app startup via attach()
         self._registry = None
         self._telemetry_collector = None
+        self._telemetry_store = None
 
-    def attach(self, registry, telemetry_collector) -> None:
-        """Wire up registry and telemetry collector after app startup."""
+    def attach(self, registry, telemetry_collector, telemetry_store=None) -> None:
         self._registry = registry
         self._telemetry_collector = telemetry_collector
+        self._telemetry_store = telemetry_store
 
     # ------------------------------------------------------------------
     # Template CRUD
@@ -120,7 +147,10 @@ class ProfileManager:
                 "profile_template_registered",
                 template_id=template.id,
                 name=template.name,
+                backend=template.backend_type.value,
                 workload_affinity=[w.value for w in template.workload_affinity],
+                exclusive_model_residency=template.exclusive_model_residency,
+                idle_ttl_seconds=template.idle_ttl_seconds,
             )
             return template
 
@@ -132,65 +162,113 @@ class ProfileManager:
 
     async def delete_template(self, template_id: str) -> bool:
         async with self._lock:
-            if template_id not in self._templates:
-                return False
-            del self._templates[template_id]
-            return True
+            template = self._templates.get(template_id)
+        if template is None:
+            return False
+        if template.activated:
+            await self._deactivate(template)
+        async with self._lock:
+            self._templates.pop(template_id, None)
+        return True
 
     # ------------------------------------------------------------------
-    # Lazy activation
+    # Request-driven orchestration
     # ------------------------------------------------------------------
 
-    async def maybe_activate_for_request(self, profile: RequestProfile) -> None:
+    async def ensure_capacity_for_request(self, profile: RequestProfile) -> None:
         """
-        Activate only templates relevant to the incoming request.
+        Ensure there is at least one live endpoint for the requested model.
 
-        This avoids eagerly spinning every backend for a workload class and helps
-        keep GPU memory pressure down when multiple engines can serve the same model.
+        If no matching live endpoint exists, synchronously activate the best dormant
+        template for this request so the current request can route successfully.
         """
         if self._registry is None:
             return
+        live = await self._registry.find_by_model(profile.model_requested)
+        if live:
+            return
+        candidate = await self._best_template_for_request(profile, dormant_only=True)
+        if candidate is None:
+            return
+        await self._activate(candidate, profile)
 
+    async def maybe_activate_for_request(self, profile: RequestProfile) -> None:
+        """Asynchronously pre-warm the best dormant template for future requests."""
+        candidate = await self._best_template_for_request(profile, dormant_only=True)
+        if candidate is None:
+            return
+        asyncio.create_task(self._activate(candidate, profile))
+
+    async def record_endpoint_use(self, endpoint_id: str) -> None:
         async with self._lock:
-            to_activate = [
-                t for t in self._templates.values()
-                if t.auto_activate
-                and not t.activated
-                and (not t.workload_affinity or profile.workload_type in t.workload_affinity)
-                and self._model_matches_template(t, profile.model_requested)
-            ]
+            for template in self._templates.values():
+                if template.activated_endpoint_id == endpoint_id:
+                    template.last_used_at = datetime.utcnow()
+                    break
 
-        for template in to_activate:
-            asyncio.create_task(self._activate(template))
+    async def reconcile_idle_templates(self) -> int:
+        """Deactivate templates whose live endpoint has been idle past TTL."""
+        async with self._lock:
+            templates = list(self._templates.values())
 
-    @staticmethod
-    def _model_matches_template(template: BackendProfileTemplate, requested_model: str) -> bool:
-        if not template.activation_model_names:
-            return True
-        req = requested_model.lower()
-        return any(req == m.lower() or req.startswith(m.lower()) for m in template.activation_model_names)
+        deactivated = 0
+        now = datetime.utcnow()
+        for template in templates:
+            if not template.activated or not template.activated_endpoint_id:
+                continue
+            last_used = template.last_used_at or template.activated_at or template.created_at
+            if now - last_used < timedelta(seconds=template.idle_ttl_seconds):
+                continue
+
+            if self._telemetry_store is not None:
+                tel = self._telemetry_store.get(template.activated_endpoint_id)
+                if tel and (tel.active_requests > 0 or tel.queue_depth > 0):
+                    continue
+
+            await self._deactivate(template)
+            deactivated += 1
+
+        return deactivated
+
+    # ------------------------------------------------------------------
+    # Activation / deactivation
+    # ------------------------------------------------------------------
 
     async def activate_template(self, template_id: str) -> BackendProfileTemplate | None:
-        """Manually activate a specific template (blocking)."""
         template = self._templates.get(template_id)
         if template is None:
             return None
-        await self._activate(template)
+        await self._activate(template, None)
         return template
 
-    async def _activate(self, template: BackendProfileTemplate) -> None:
-        """Register the template as a live endpoint. Idempotent."""
+    async def deactivate_template(self, template_id: str) -> BackendProfileTemplate | None:
+        template = self._templates.get(template_id)
+        if template is None:
+            return None
+        await self._deactivate(template)
+        return template
+
+    async def _activate(
+        self,
+        template: BackendProfileTemplate,
+        profile: RequestProfile | None,
+    ) -> None:
         async with self._lock:
             if template.activated:
+                template.last_used_at = datetime.utcnow()
                 return
-            # Mark activated immediately to prevent duplicate activation
             template.activated = True
 
         if self._registry is None or self._telemetry_collector is None:
             logger.warning("profile_activation_skipped_no_registry", template_id=template.id)
+            async with self._lock:
+                template.activated = False
             return
 
         try:
+            if template.exclusive_model_residency:
+                await self._deactivate_sibling_templates(template)
+
             req = EndpointRegisterRequest(
                 name=template.name,
                 nim_url=template.nim_url,
@@ -209,23 +287,183 @@ class ProfileManager:
                 capability_flags=template.capability_flags,
                 cost_per_gpu_hour=template.cost_per_gpu_hour,
             )
-            profile = await self._registry.register(req)
-            self._telemetry_collector.register_endpoint(profile)
+            endpoint = await self._registry.register(req)
+            self._telemetry_collector.register_endpoint(endpoint)
 
-            template.activated_endpoint_id = profile.id
-            template.activated_at = datetime.utcnow()
+            now = datetime.utcnow()
+            async with self._lock:
+                template.activated = True
+                template.activated_endpoint_id = endpoint.id
+                template.activated_at = now
+                template.last_used_at = now
+                template.activation_count += 1
 
             logger.info(
                 "profile_template_activated",
                 template_id=template.id,
-                endpoint_id=profile.id,
+                endpoint_id=endpoint.id,
                 name=template.name,
+                backend=template.backend_type.value,
+                request_model=(profile.model_requested if profile else template.model_name),
             )
         except Exception as exc:
-            # Roll back activated flag so it can be retried
-            template.activated = False
+            async with self._lock:
+                template.activated = False
             logger.error(
                 "profile_template_activation_failed",
                 template_id=template.id,
                 error=str(exc),
             )
+
+    async def _deactivate(self, template: BackendProfileTemplate) -> None:
+        endpoint_id = template.activated_endpoint_id
+        if endpoint_id and self._telemetry_collector is not None:
+            self._telemetry_collector.unregister_endpoint(endpoint_id)
+        if endpoint_id and self._registry is not None:
+            await self._registry.delete(endpoint_id)
+
+        async with self._lock:
+            template.activated = False
+            template.activated_endpoint_id = None
+            template.activated_at = None
+            template.last_used_at = None
+
+        logger.info(
+            "profile_template_deactivated",
+            template_id=template.id,
+            name=template.name,
+            endpoint_id=endpoint_id,
+        )
+
+    async def _deactivate_sibling_templates(self, activated_template: BackendProfileTemplate) -> None:
+        async with self._lock:
+            siblings = [
+                t for t in self._templates.values()
+                if t.id != activated_template.id
+                and t.activated
+                and self._same_model_family_or_name(t, activated_template)
+            ]
+        for sibling in siblings:
+            await self._deactivate(sibling)
+
+    # ------------------------------------------------------------------
+    # Template selection
+    # ------------------------------------------------------------------
+
+    async def _best_template_for_request(
+        self,
+        profile: RequestProfile,
+        dormant_only: bool,
+    ) -> BackendProfileTemplate | None:
+        async with self._lock:
+            candidates = [
+                t for t in self._templates.values()
+                if t.auto_activate
+                and (not t.activated if dormant_only else True)
+                and self._template_matches_request(t, profile)
+            ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda t: self._template_score(t, profile))
+
+    @staticmethod
+    def _template_matches_request(template: BackendProfileTemplate, profile: RequestProfile) -> bool:
+        if template.workload_affinity and profile.workload_type not in template.workload_affinity:
+            return False
+        if profile.total_tokens > template.max_context_tokens:
+            return False
+        return ProfileManager._model_matches_template(template, profile.model_requested)
+
+    @staticmethod
+    def _model_matches_template(template: BackendProfileTemplate, requested_model: str) -> bool:
+        req = requested_model.lower()
+        if req in ("", "*", "any"):
+            return True
+        candidates = list(template.activation_model_names)
+        if template.model_name:
+            candidates.append(template.model_name)
+        if template.model_family:
+            candidates.append(template.model_family)
+        for candidate in candidates:
+            cand = candidate.lower()
+            if req == cand or req.startswith(cand) or cand.startswith(req):
+                return True
+        return False
+
+    @staticmethod
+    def _same_model_family_or_name(a: BackendProfileTemplate, b: BackendProfileTemplate) -> bool:
+        a_names = {x.lower() for x in ([a.model_name, a.model_family] + a.activation_model_names) if x}
+        b_names = {x.lower() for x in ([b.model_name, b.model_family] + b.activation_model_names) if x}
+        return bool(a_names & b_names)
+
+    def _template_score(self, template: BackendProfileTemplate, profile: RequestProfile) -> float:
+        score = 0.0
+
+        # Model specificity: exact match > family match.
+        if template.model_name.lower() == profile.model_requested.lower():
+            score += 3.0
+        elif profile.inferred_model_family and profile.inferred_model_family in template.model_name.lower():
+            score += 2.0
+        else:
+            score += 1.0
+
+        # Backend affinity by workload and user intent.
+        affinity = {
+            BackendType.NIM: {
+                WorkloadType.REASONING: 1.0,
+                WorkloadType.PREFILL_HEAVY: 0.9,
+                WorkloadType.BALANCED: 0.8,
+                WorkloadType.DECODE_HEAVY: 0.7,
+            },
+            BackendType.VLLM: {
+                WorkloadType.REASONING: 0.75,
+                WorkloadType.PREFILL_HEAVY: 0.7,
+                WorkloadType.BALANCED: 0.85,
+                WorkloadType.DECODE_HEAVY: 1.0,
+            },
+            BackendType.SGLANG: {
+                WorkloadType.REASONING: 0.7,
+                WorkloadType.PREFILL_HEAVY: 1.0,
+                WorkloadType.BALANCED: 0.85,
+                WorkloadType.DECODE_HEAVY: 0.75,
+            },
+            BackendType.DYNAMO: {
+                WorkloadType.REASONING: 0.85,
+                WorkloadType.PREFILL_HEAVY: 0.95,
+                WorkloadType.BALANCED: 0.9,
+                WorkloadType.DECODE_HEAVY: 0.95,
+            },
+            BackendType.OLLAMA: {
+                WorkloadType.REASONING: 0.5,
+                WorkloadType.PREFILL_HEAVY: 0.6,
+                WorkloadType.BALANCED: 0.7,
+                WorkloadType.DECODE_HEAVY: 0.65,
+            },
+        }
+        score += affinity[template.backend_type][profile.workload_type] * 3.0
+
+        vram = _GPU_MEMORY_GB.get(template.gpu_name, 24.0) * max(template.gpu_count, 1)
+        score += min(vram / 80.0, 2.0)
+
+        if profile.optimization_target == OptimizationTarget.LATENCY:
+            if template.backend_type == BackendType.NIM:
+                score += 1.0
+            if profile.streaming and template.supports_streaming:
+                score += 0.1
+        elif profile.optimization_target == OptimizationTarget.THROUGHPUT:
+            if template.backend_type in (BackendType.VLLM, BackendType.DYNAMO):
+                score += 1.0
+
+        if profile.osl_tokens >= 1024 and template.backend_type in (BackendType.VLLM, BackendType.DYNAMO):
+            score += 0.75
+        if profile.isl_tokens >= 1024 and template.backend_type == BackendType.SGLANG:
+            score += 0.75
+        if profile.workload_type == WorkloadType.REASONING and template.supports_reasoning:
+            score += 0.75
+
+        if template.cost_class == CostClass.ECONOMY and profile.optimization_target == OptimizationTarget.THROUGHPUT:
+            score += 0.2
+        if template.cost_class == CostClass.PREMIUM and profile.optimization_target == OptimizationTarget.LATENCY:
+            score += 0.2
+
+        return score

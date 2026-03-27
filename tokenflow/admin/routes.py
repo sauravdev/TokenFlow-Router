@@ -272,6 +272,24 @@ async def activate_profile_template(template_id: str, request: Request) -> JSONR
     return JSONResponse(content=t.model_dump(mode="json"))
 
 
+@router.post("/profiles/{template_id}/deactivate")
+async def deactivate_profile_template(template_id: str, request: Request) -> JSONResponse:
+    """Manually deactivate a live profile template and unregister its endpoint."""
+    state = _state(request)
+    t = await state.profile_manager.deactivate_template(template_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return JSONResponse(content=t.model_dump(mode="json"))
+
+
+@router.post("/profiles/reconcile")
+async def reconcile_profiles(request: Request) -> JSONResponse:
+    """Run idle deactivation reconciliation immediately."""
+    state = _state(request)
+    deactivated = await state.profile_manager.reconcile_idle_templates()
+    return JSONResponse(content={"deactivated": deactivated})
+
+
 @router.delete("/profiles/{template_id}", status_code=204)
 async def delete_profile_template(template_id: str, request: Request) -> Response:
     state = _state(request)

@@ -248,6 +248,24 @@ curl -X POST http://localhost:8080/admin/endpoints \
     "max_context_tokens": 32768
   }'
 
+# Register a Dynamo endpoint
+curl -X POST http://localhost:8080/admin/endpoints \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "dynamo-h100-llama3-70b",
+    "nim_url": "http://your-dynamo-router:8000",
+    "model_name": "meta/llama-3.1-70b-instruct",
+    "gpu_name": "H100",
+    "backend_type": "dynamo",
+    "cost_class": "premium",
+    "cost_per_gpu_hour": 9.0,
+    "max_context_tokens": 131072,
+    "capability_flags": {
+      "disaggregated": true,
+      "kv_transfer": true
+    }
+  }'
+
 # Send an inference request (OpenAI-compatible)
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -330,6 +348,39 @@ Successful non-streaming responses include a `_tokenflow` block with:
 
 ---
 
+## Dormant backend templates and single-owner model placement
+
+If you do **not** want to keep every backend live all the time, use `/admin/profiles` instead of `/admin/endpoints`.
+
+Profile templates let you register **available but dormant** backends. TokenFlow can then:
+- activate the best matching backend template when a request arrives
+- prefer a single backend for a model/workload instead of activating everything
+- deactivate idle templates after a TTL so duplicate model copies do not stay live unnecessarily
+
+### Example: keep only the needed backend active
+
+```bash
+curl -X POST http://localhost:8080/admin/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "dynamo-h100-llama3-70b-template",
+    "nim_url": "http://your-dynamo-router:8000",
+    "backend_type": "dynamo",
+    "model_name": "meta/llama-3.1-70b-instruct",
+    "model_family": "llama",
+    "gpu_name": "H100",
+    "cost_class": "premium",
+    "activation_model_names": ["meta/llama-3.1-70b-instruct", "llama"],
+    "workload_affinity": ["balanced", "decode_heavy"],
+    "exclusive_model_residency": true,
+    "idle_ttl_seconds": 900
+  }'
+```
+
+With `exclusive_model_residency=true`, activating this template can deactivate sibling templates for the same model family so TokenFlow does not keep multiple live copies by default.
+
+---
+
 ## Admin API
 
 All admin endpoints are under `/admin/...`.
@@ -350,6 +401,13 @@ All admin endpoints are under `/admin/...`.
 | `GET` | `/admin/policy` | Get active policy |
 | `POST` | `/admin/policy` | Replace active policy |
 | `POST` | `/admin/policy/preset` | Switch preset |
+| `POST` | `/admin/profiles` | Register a dormant backend template |
+| `GET` | `/admin/profiles` | List backend templates |
+| `GET` | `/admin/profiles/{id}` | Get one backend template |
+| `POST` | `/admin/profiles/{id}/activate` | Manually activate a template |
+| `POST` | `/admin/profiles/{id}/deactivate` | Deactivate a live template |
+| `POST` | `/admin/profiles/reconcile` | Run idle deactivation immediately |
+| `DELETE` | `/admin/profiles/{id}` | Delete a backend template |
 | `GET` | `/admin/routes/explain/{id}` | Explain a routing decision |
 | `GET` | `/admin/routes/recent` | Last N routing decisions |
 | `GET` | `/admin/metrics` | Prometheus metrics |
@@ -560,7 +618,7 @@ This section reflects the current maturity of the codebase so contributors and u
 | Workload report | GET /admin/report — tokens/requests/cost per backend + workload breakdown |
 | Admin API auth | Optional `TOKENFLOW_ADMIN_API_KEY` enforced on all `/admin/*` routes |
 | CORS hardening | Configurable `TOKENFLOW_ALLOWED_ORIGINS` (default `*` for local dev) |
-| Dynamic backend profiles | Profile templates with `workload_affinity` — lazily activated in background on first matching request |
+| Dynamic backend profiles | Dormant backend templates with `workload_affinity`, synchronous first-use activation, single-owner model residency, and idle deactivation |
 
 ### Partially implemented / known gaps
 
@@ -571,7 +629,7 @@ This section reflects the current maturity of the codebase so contributors and u
 | Endpoint health on registration | No initial health check at registration time; relies on background polling |
 | Streaming TTFT measurement | Measures TTFT from first SSE chunk, which may include proxy overhead |
 | Policy conflict resolution | Tenant policy + DSL rules can produce conflicting overrides; last-rule-wins semantics |
-| Dynamic profile lifecycle | Profiles can be activated but not automatically deactivated when workload disappears |
+| Dynamic profile lifecycle | Idle deactivation is time-based and registry-scoped; TokenFlow still does not launch/stop external containers or VMs directly |
 
 ### Planned / roadmap
 

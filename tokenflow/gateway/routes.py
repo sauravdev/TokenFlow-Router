@@ -74,6 +74,9 @@ async def chat_completions(
     if policy_actions:
         logger.debug("policy_applied", request_id=profile.request_id, actions=policy_actions)
 
+    # Ensure there is at least one matching live endpoint before routing.
+    await state.profile_manager.ensure_capacity_for_request(profile)
+
     # Route decision
     decision = await state.decision_engine.decide(profile)
 
@@ -110,6 +113,7 @@ async def chat_completions(
             t_start = time.perf_counter()
 
             if streaming:
+                await state.profile_manager.record_endpoint_use(endpoint.id)
                 return await _stream_response(
                     request, state, profile, decision, endpoint, body
                 )
@@ -117,6 +121,7 @@ async def chat_completions(
                 result = await state.proxy.forward(
                     endpoint, body, dict(request.headers)
                 )
+                await state.profile_manager.record_endpoint_use(endpoint.id)
                 e2e_ms = (time.perf_counter() - t_start) * 1000
                 ACTIVE_REQUESTS.labels(endpoint_name=endpoint.name).dec()
                 state.trace_store.record_actual_latency(

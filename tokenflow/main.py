@@ -7,6 +7,7 @@ gateway, and admin API into a single FastAPI application.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -87,7 +88,17 @@ async def lifespan(app: FastAPI):
 
     # Profile manager (dynamic backend lazy activation)
     profile_manager = ProfileManager()
-    profile_manager.attach(registry, telemetry_collector)
+    profile_manager.attach(registry, telemetry_collector, telemetry_store)
+
+    async def _profile_reaper() -> None:
+        while True:
+            try:
+                await profile_manager.reconcile_idle_templates()
+            except Exception as exc:
+                logger.warning("profile_reaper_failed", error=str(exc))
+            await asyncio.sleep(30)
+
+    profile_reaper_task = asyncio.create_task(_profile_reaper())
 
     # Attach to app state
     app.state.registry = registry
@@ -104,6 +115,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("tokenflow_shutting_down")
+    profile_reaper_task.cancel()
     await telemetry_collector.stop()
     await proxy.close()
     logger.info("tokenflow_stopped")
