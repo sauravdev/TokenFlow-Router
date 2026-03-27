@@ -387,6 +387,28 @@ curl -X POST http://localhost:8080/admin/profiles \
 
 With `exclusive_model_residency=true`, activating this template can deactivate sibling templates for the same model family so TokenFlow does not keep multiple live copies by default.
 
+### Sample external controller
+
+A sample controller is included at:
+- `examples/autoscale/tokenflow_capacity_controller.py`
+- `examples/autoscale/endpoint_actions.example.json`
+
+It polls `/admin/profiles`, treats each template's `activated` flag as desired state, and maps that into engine-specific start/stop hooks.
+
+Example:
+
+```bash
+python examples/autoscale/tokenflow_capacity_controller.py \
+  --tokenflow-url http://localhost:8080 \
+  --config examples/autoscale/endpoint_actions.example.json \
+  --dry-run
+```
+
+This sample also lines up with the response headers exposed to external callers:
+- `X-TokenFlow-Active-Backend`
+- `X-TokenFlow-Active-Endpoint`
+- `X-TokenFlow-Turn-Down-Candidates`
+
 ---
 
 ## Admin API

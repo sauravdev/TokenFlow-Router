@@ -1,0 +1,64 @@
+{
+  "targets": [
+    {
+      "template_name": "vllm-h200-llama3-70b-template",
+      "backend_type": "vllm",
+      "model_name": "meta/llama-3.1-70b-instruct",
+      "base_url": "http://127.0.0.1:8000",
+      "healthcheck_url": "http://127.0.0.1:8000/health",
+      "stop_when_inactive": true
+    },
+    {
+      "template_name": "sglang-h100-llama3-70b-template",
+      "backend_type": "sglang",
+      "model_name": "meta/llama-3.1-70b-instruct",
+      "base_url": "http://127.0.0.1:30000",
+      "healthcheck_url": "http://127.0.0.1:30000/health",
+      "stop_when_inactive": true
+    },
+    {
+      "template_name": "ollama-8b-template",
+      "backend_type": "ollama",
+      "model_name": "llama3.1:8b",
+      "base_url": "http://127.0.0.1:11434",
+      "healthcheck_url": "http://127.0.0.1:11434/api/tags",
+      "stop_when_inactive": true
+    },
+    {
+      "template_name": "nim-70b-template",
+      "backend_type": "nim",
+      "model_name": "meta/llama-3.1-70b-instruct",
+      "base_url": "http://127.0.0.1:9000",
+      "healthcheck_url": "http://127.0.0.1:9000/v1/health/ready",
+      "start_command": [
+        "bash",
+        "-lc",
+        "docker run -d --rm --gpus all --name nim-70b -p 9000:8000 -e NGC_API_KEY=$NGC_API_KEY <your-nim-image>"
+      ],
+      "stop_command": [
+        "bash",
+        "-lc",
+        "docker stop nim-70b"
+      ],
+      "stop_when_inactive": true
+    },
+    {
+      "template_name": "dynamo-70b-template",
+      "backend_type": "dynamo",
+      "model_name": "meta/llama-3.1-70b-instruct",
+      "base_url": "http://127.0.0.1:9100",
+      "healthcheck_url": "http://127.0.0.1:9100/health",
+      "start_command": [
+        "bash",
+        "-lc",
+        "<your-dynamo-start-command>"
+      ],
+      "stop_command": [
+        "bash",
+        "-lc",
+        "<your-dynamo-stop-command>"
+      ],
+      "stop_when_inactive": true
+    }
+  ]
+}
