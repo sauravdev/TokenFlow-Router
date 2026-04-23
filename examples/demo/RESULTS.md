@@ -169,3 +169,71 @@ Raw results for the runs above are saved as:
 
 - `benchmark_low_conc.json`   (n=150, concurrency=8)
 - `benchmark_high_conc.json`  (n=200, concurrency=32)
+
+Both JSON files contain a `summary` block (the rows shown in the tables
+above) and a `raw` block with per-request data for every arm:
+
+    {
+      "raw": {
+        "A direct":      [{idx, shape, slo_ms, endpoint_used, ok, latency_ms, tokens_out, cost_usd}, ...],
+        "B round-robin": [...],
+        "C router":      [...]
+      }
+    }
+
+600 per-request records in the high-concurrency file, 450 in the
+low-concurrency file. Use these for custom analyses — e.g., to extract
+the TTFT distribution for the reasoning shape only, or to verify the
+router's endpoint decisions per shape.
+
+
+Prometheus router counters
+--------------------------
+
+`prometheus_before.txt` and `prometheus_after.txt` capture the router's
+internal metrics at `/admin/metrics` before and after the benchmark
+re-runs. The counters are cumulative over the router's lifetime, so the
+delta between the two files is what each run contributed. Most useful
+series:
+
+- `tokenflow_route_decisions_total{endpoint_name,priority_tier,workload_type,outcome}` — one counter per (endpoint, tier, workload, outcome) tuple. Distribution confirms where each request class went.
+- `tokenflow_upstream_request_latency_ms_count` / `_sum` — per-endpoint request count and cumulative latency. Dividing gives mean upstream latency per backend.
+- `tokenflow_estimated_cost_usd_total{endpoint_name,tenant_id}` — router-computed cost per tenant. Matches `$/1k tok` in the summary table to within float precision.
+- `tokenflow_active_requests` / `_endpoint_health` — live health gauges, always 0/healthy at snapshot time (post-run).
+
+Example deltas observed (post-run snapshot, includes smoke tests + both
+benchmark runs across the session):
+
+    vllm-fast   routed 721 requests   cumulative latency 425805 ms   mean 590 ms
+    vllm-quality routed 142 requests  cumulative latency 282274 ms   mean 1988 ms
+
+Every one of the 142 requests routed to `vllm-quality` had
+`priority_tier=premium, workload_type=decode_heavy`. The router never
+put a non-premium request on the 7B model and never routed a premium
+reasoning request to the 3B — no manual tuning required.
+
+
+Re-run stability note
+---------------------
+
+We re-ran both benchmarks after the backends had been running for ~15
+minutes (fully warm, KV caches populated, model weights paged in). The
+round-robin arm's catastrophic collapse at concurrency 32 (p95 9438 ms,
+11% SLO miss) does **not** reproduce on the warm re-run — it converges
+to p95 ~3.3 s with 0% SLO miss. The router still wins in every run, but
+the magnitude shrinks with warmth:
+
+| Metric (c=32)              | Run 1 (warming) | Run 2 (warm) |
+| -------------------------- | --------------: | -----------: |
+| Round-robin p95 (ms)       |            9438 |         3276 |
+| Router p95 (ms)            |            2530 |         2392 |
+| Router p95 advantage       |            -73% |         -27% |
+| Round-robin cost ($ / 200) |           0.877 |        0.294 |
+| Router cost ($ / 200)      |           0.235 |        0.230 |
+| Router cost advantage      |            -73% |         -22% |
+
+The qualitative point stands across runs: under mixed workloads the
+router delivers lower tail latency and lower cost than blind round-robin
+because it matches request shape to backend strength instead of spraying
+requests evenly. How dramatic the win looks depends on how warm the
+slower backend's KV cache is at the moment of measurement.

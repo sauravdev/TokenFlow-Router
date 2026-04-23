@@ -363,6 +363,7 @@ async def main_async(args):
     sem = asyncio.Semaphore(args.concurrency)
 
     rows = []
+    all_raw: dict[str, list[Result]] = {}
     for arm_name, fn in [
         ("A direct",        arm_direct),
         ("B round-robin",   arm_round_robin),
@@ -374,12 +375,13 @@ async def main_async(args):
         wall = time.perf_counter() - t0
         summary = summarise(arm_name, res, wall)
         rows.append(summary)
+        all_raw[arm_name] = res
         print(f"   took {wall:.1f}s  endpoint_distribution={summary['endpoint_distribution']}")
 
     print("\n" + "=" * 40 + " RESULTS " + "=" * 40)
     print_table(rows)
 
-    # persist raw results for post-hoc analysis
+    # persist both summary and per-request raw data for post-hoc analysis
     if args.out:
         with open(args.out, "w") as f:
             json.dump({
@@ -387,6 +389,22 @@ async def main_async(args):
                 "seed": args.seed,
                 "concurrency": args.concurrency,
                 "summary": rows,
+                "raw": {
+                    arm: [
+                        {
+                            "idx": r.idx,
+                            "shape": r.shape,
+                            "slo_ms": r.slo_ms,
+                            "endpoint_used": r.endpoint_used,
+                            "ok": r.ok,
+                            "latency_ms": round(r.latency_ms, 2),
+                            "tokens_out": r.tokens_out,
+                            "cost_usd": round(r.cost_usd, 8),
+                        }
+                        for r in raw
+                    ]
+                    for arm, raw in all_raw.items()
+                },
             }, f, indent=2)
         print(f"\nResults saved to {args.out}")
 

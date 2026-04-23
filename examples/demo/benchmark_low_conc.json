@@ -8,15 +8,15 @@
       "requests": 150,
       "success": 150,
       "failed": 0,
-      "throughput_rps": 11.14,
-      "p50_ms": 287.2,
-      "p95_ms": 2164.7,
-      "p99_ms": 2225.8,
-      "mean_ms": 649.7,
+      "throughput_rps": 10.98,
+      "p50_ms": 309.4,
+      "p95_ms": 2175.5,
+      "p99_ms": 2350.8,
+      "mean_ms": 654.4,
       "slo_miss": 0,
       "slo_miss_rate_pct": 0.0,
-      "total_cost_usd": 0.067672,
-      "cost_per_1k_tok_usd": 0.003092,
+      "total_cost_usd": 0.068165,
+      "cost_per_1k_tok_usd": 0.003129,
       "endpoint_distribution": {
         "vllm-fast": 150
       }
@@ -26,15 +26,15 @@
       "requests": 150,
       "success": 150,
       "failed": 0,
-      "throughput_rps": 9.38,
-      "p50_ms": 302.0,
-      "p95_ms": 3235.7,
-      "p99_ms": 3264.3,
-      "mean_ms": 788.4,
+      "throughput_rps": 9.33,
+      "p50_ms": 314.8,
+      "p95_ms": 3236.4,
+      "p99_ms": 3268.0,
+      "mean_ms": 793.4,
       "slo_miss": 0,
       "slo_miss_rate_pct": 0.0,
-      "total_cost_usd": 0.186764,
-      "cost_per_1k_tok_usd": 0.008521,
+      "total_cost_usd": 0.187863,
+      "cost_per_1k_tok_usd": 0.008546,
       "endpoint_distribution": {
         "vllm-fast": 75,
         "vllm-quality": 75
@@ -45,19 +45,4527 @@
       "requests": 150,
       "success": 150,
       "failed": 0,
-      "throughput_rps": 9.42,
-      "p50_ms": 322.0,
-      "p95_ms": 2371.4,
-      "p99_ms": 2579.8,
-      "mean_ms": 778.0,
+      "throughput_rps": 9.74,
+      "p50_ms": 330.0,
+      "p95_ms": 2195.7,
+      "p99_ms": 2210.8,
+      "mean_ms": 751.3,
       "slo_miss": 0,
       "slo_miss_rate_pct": 0.0,
-      "total_cost_usd": 0.149333,
-      "cost_per_1k_tok_usd": 0.006841,
+      "total_cost_usd": 0.146465,
+      "cost_per_1k_tok_usd": 0.00671,
       "endpoint_distribution": {
         "vllm-quality": 23,
         "vllm-fast": 127
       }
     }
-  ]
+  ],
+  "raw": {
+    "A direct": [
+      {
+        "idx": 0,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1382.0,
+        "tokens_out": 300,
+        "cost_usd": 0.00095972
+      },
+      {
+        "idx": 1,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 417.21,
+        "tokens_out": 80,
+        "cost_usd": 0.00028973
+      },
+      {
+        "idx": 2,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 213.6,
+        "tokens_out": 32,
+        "cost_usd": 0.00014833
+      },
+      {
+        "idx": 3,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 410.32,
+        "tokens_out": 77,
+        "cost_usd": 0.00028494
+      },
+      {
+        "idx": 4,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 419.67,
+        "tokens_out": 80,
+        "cost_usd": 0.00029144
+      },
+      {
+        "idx": 5,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2237.86,
+        "tokens_out": 500,
+        "cost_usd": 0.00155407
+      },
+      {
+        "idx": 6,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1382.01,
+        "tokens_out": 300,
+        "cost_usd": 0.00095973
+      },
+      {
+        "idx": 7,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 211.37,
+        "tokens_out": 32,
+        "cost_usd": 0.00014678
+      },
+      {
+        "idx": 8,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.47,
+        "tokens_out": 32,
+        "cost_usd": 0.00010727
+      },
+      {
+        "idx": 9,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.21,
+        "tokens_out": 32,
+        "cost_usd": 0.00010709
+      },
+      {
+        "idx": 10,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 337.21,
+        "tokens_out": 67,
+        "cost_usd": 0.00023417
+      },
+      {
+        "idx": 11,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 364.57,
+        "tokens_out": 71,
+        "cost_usd": 0.00025317
+      },
+      {
+        "idx": 12,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 76.75,
+        "tokens_out": 10,
+        "cost_usd": 5.33e-05
+      },
+      {
+        "idx": 13,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1312.23,
+        "tokens_out": 300,
+        "cost_usd": 0.00091127
+      },
+      {
+        "idx": 14,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 392.42,
+        "tokens_out": 80,
+        "cost_usd": 0.00027251
+      },
+      {
+        "idx": 15,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 62.12,
+        "tokens_out": 10,
+        "cost_usd": 4.314e-05
+      },
+      {
+        "idx": 16,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 151.1,
+        "tokens_out": 32,
+        "cost_usd": 0.00010493
+      },
+      {
+        "idx": 17,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 103.53,
+        "tokens_out": 16,
+        "cost_usd": 7.19e-05
+      },
+      {
+        "idx": 18,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 72.7,
+        "tokens_out": 10,
+        "cost_usd": 5.049e-05
+      },
+      {
+        "idx": 19,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 74.87,
+        "tokens_out": 12,
+        "cost_usd": 5.199e-05
+      },
+      {
+        "idx": 20,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1290.8,
+        "tokens_out": 300,
+        "cost_usd": 0.00089639
+      },
+      {
+        "idx": 21,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 322.13,
+        "tokens_out": 70,
+        "cost_usd": 0.0002237
+      },
+      {
+        "idx": 22,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1299.93,
+        "tokens_out": 300,
+        "cost_usd": 0.00090273
+      },
+      {
+        "idx": 23,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 79.33,
+        "tokens_out": 12,
+        "cost_usd": 5.509e-05
+      },
+      {
+        "idx": 24,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 323.52,
+        "tokens_out": 73,
+        "cost_usd": 0.00022466
+      },
+      {
+        "idx": 25,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1312.58,
+        "tokens_out": 300,
+        "cost_usd": 0.00091151
+      },
+      {
+        "idx": 26,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1327.01,
+        "tokens_out": 300,
+        "cost_usd": 0.00092154
+      },
+      {
+        "idx": 27,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.52,
+        "tokens_out": 32,
+        "cost_usd": 0.00010869
+      },
+      {
+        "idx": 28,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 336.98,
+        "tokens_out": 77,
+        "cost_usd": 0.00023401
+      },
+      {
+        "idx": 29,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2175.13,
+        "tokens_out": 500,
+        "cost_usd": 0.00151051
+      },
+      {
+        "idx": 30,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2175.48,
+        "tokens_out": 500,
+        "cost_usd": 0.00151075
+      },
+      {
+        "idx": 31,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 70.71,
+        "tokens_out": 12,
+        "cost_usd": 4.91e-05
+      },
+      {
+        "idx": 32,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 69.48,
+        "tokens_out": 12,
+        "cost_usd": 4.825e-05
+      },
+      {
+        "idx": 33,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.23,
+        "tokens_out": 12,
+        "cost_usd": 4.738e-05
+      },
+      {
+        "idx": 34,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 373.91,
+        "tokens_out": 80,
+        "cost_usd": 0.00025966
+      },
+      {
+        "idx": 35,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 314.38,
+        "tokens_out": 64,
+        "cost_usd": 0.00021832
+      },
+      {
+        "idx": 36,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.5,
+        "tokens_out": 32,
+        "cost_usd": 0.00010868
+      },
+      {
+        "idx": 37,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1324.96,
+        "tokens_out": 300,
+        "cost_usd": 0.00092011
+      },
+      {
+        "idx": 38,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.58,
+        "tokens_out": 10,
+        "cost_usd": 4.763e-05
+      },
+      {
+        "idx": 39,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 177.34,
+        "tokens_out": 32,
+        "cost_usd": 0.00012315
+      },
+      {
+        "idx": 40,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 92.1,
+        "tokens_out": 16,
+        "cost_usd": 6.396e-05
+      },
+      {
+        "idx": 41,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 352.43,
+        "tokens_out": 70,
+        "cost_usd": 0.00024475
+      },
+      {
+        "idx": 42,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 403.61,
+        "tokens_out": 80,
+        "cost_usd": 0.00028029
+      },
+      {
+        "idx": 43,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 57.0,
+        "tokens_out": 8,
+        "cost_usd": 3.958e-05
+      },
+      {
+        "idx": 44,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 398.94,
+        "tokens_out": 80,
+        "cost_usd": 0.00027704
+      },
+      {
+        "idx": 45,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 55.46,
+        "tokens_out": 8,
+        "cost_usd": 3.851e-05
+      },
+      {
+        "idx": 46,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 161.44,
+        "tokens_out": 32,
+        "cost_usd": 0.00011211
+      },
+      {
+        "idx": 47,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2131.12,
+        "tokens_out": 500,
+        "cost_usd": 0.00147994
+      },
+      {
+        "idx": 48,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.76,
+        "tokens_out": 10,
+        "cost_usd": 4.775e-05
+      },
+      {
+        "idx": 49,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 66.96,
+        "tokens_out": 10,
+        "cost_usd": 4.65e-05
+      },
+      {
+        "idx": 50,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 166.98,
+        "tokens_out": 32,
+        "cost_usd": 0.00011596
+      },
+      {
+        "idx": 51,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 166.11,
+        "tokens_out": 32,
+        "cost_usd": 0.00011535
+      },
+      {
+        "idx": 52,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1254.27,
+        "tokens_out": 300,
+        "cost_usd": 0.00087102
+      },
+      {
+        "idx": 53,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1261.56,
+        "tokens_out": 300,
+        "cost_usd": 0.00087608
+      },
+      {
+        "idx": 54,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 148.6,
+        "tokens_out": 32,
+        "cost_usd": 0.00010319
+      },
+      {
+        "idx": 55,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2114.27,
+        "tokens_out": 500,
+        "cost_usd": 0.00146824
+      },
+      {
+        "idx": 56,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1257.01,
+        "tokens_out": 300,
+        "cost_usd": 0.00087292
+      },
+      {
+        "idx": 57,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 354.89,
+        "tokens_out": 80,
+        "cost_usd": 0.00024645
+      },
+      {
+        "idx": 58,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2130.41,
+        "tokens_out": 500,
+        "cost_usd": 0.00147945
+      },
+      {
+        "idx": 59,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1315.29,
+        "tokens_out": 300,
+        "cost_usd": 0.0009134
+      },
+      {
+        "idx": 60,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 51.88,
+        "tokens_out": 8,
+        "cost_usd": 3.603e-05
+      },
+      {
+        "idx": 61,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.72,
+        "tokens_out": 32,
+        "cost_usd": 0.00010744
+      },
+      {
+        "idx": 62,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2128.88,
+        "tokens_out": 500,
+        "cost_usd": 0.00147839
+      },
+      {
+        "idx": 63,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.15,
+        "tokens_out": 32,
+        "cost_usd": 0.00010357
+      },
+      {
+        "idx": 64,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2119.32,
+        "tokens_out": 500,
+        "cost_usd": 0.00147175
+      },
+      {
+        "idx": 65,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 360.83,
+        "tokens_out": 80,
+        "cost_usd": 0.00025058
+      },
+      {
+        "idx": 66,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 150.5,
+        "tokens_out": 32,
+        "cost_usd": 0.00010451
+      },
+      {
+        "idx": 67,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 309.39,
+        "tokens_out": 66,
+        "cost_usd": 0.00021486
+      },
+      {
+        "idx": 68,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 342.93,
+        "tokens_out": 73,
+        "cost_usd": 0.00023814
+      },
+      {
+        "idx": 69,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 85.13,
+        "tokens_out": 16,
+        "cost_usd": 5.912e-05
+      },
+      {
+        "idx": 70,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 67.96,
+        "tokens_out": 10,
+        "cost_usd": 4.72e-05
+      },
+      {
+        "idx": 71,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 70.18,
+        "tokens_out": 12,
+        "cost_usd": 4.874e-05
+      },
+      {
+        "idx": 72,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2115.44,
+        "tokens_out": 500,
+        "cost_usd": 0.00146906
+      },
+      {
+        "idx": 73,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1260.36,
+        "tokens_out": 300,
+        "cost_usd": 0.00087525
+      },
+      {
+        "idx": 74,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2114.31,
+        "tokens_out": 500,
+        "cost_usd": 0.00146827
+      },
+      {
+        "idx": 75,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 354.83,
+        "tokens_out": 80,
+        "cost_usd": 0.00024641
+      },
+      {
+        "idx": 76,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1259.4,
+        "tokens_out": 300,
+        "cost_usd": 0.00087459
+      },
+      {
+        "idx": 77,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 148.66,
+        "tokens_out": 32,
+        "cost_usd": 0.00010324
+      },
+      {
+        "idx": 78,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1270.9,
+        "tokens_out": 300,
+        "cost_usd": 0.00088257
+      },
+      {
+        "idx": 79,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2135.06,
+        "tokens_out": 500,
+        "cost_usd": 0.00148268
+      },
+      {
+        "idx": 80,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 51.92,
+        "tokens_out": 8,
+        "cost_usd": 3.605e-05
+      },
+      {
+        "idx": 81,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 92.0,
+        "tokens_out": 16,
+        "cost_usd": 6.389e-05
+      },
+      {
+        "idx": 82,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2140.7,
+        "tokens_out": 500,
+        "cost_usd": 0.00148659
+      },
+      {
+        "idx": 83,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.64,
+        "tokens_out": 32,
+        "cost_usd": 0.00010392
+      },
+      {
+        "idx": 84,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2135.14,
+        "tokens_out": 500,
+        "cost_usd": 0.00148274
+      },
+      {
+        "idx": 85,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.18,
+        "tokens_out": 10,
+        "cost_usd": 4.248e-05
+      },
+      {
+        "idx": 86,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 354.29,
+        "tokens_out": 80,
+        "cost_usd": 0.00024604
+      },
+      {
+        "idx": 87,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2146.76,
+        "tokens_out": 500,
+        "cost_usd": 0.00149081
+      },
+      {
+        "idx": 88,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 373.1,
+        "tokens_out": 80,
+        "cost_usd": 0.00025909
+      },
+      {
+        "idx": 89,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 60.92,
+        "tokens_out": 10,
+        "cost_usd": 4.231e-05
+      },
+      {
+        "idx": 90,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2110.04,
+        "tokens_out": 490,
+        "cost_usd": 0.00146531
+      },
+      {
+        "idx": 91,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 150.17,
+        "tokens_out": 32,
+        "cost_usd": 0.00010429
+      },
+      {
+        "idx": 92,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.3,
+        "tokens_out": 32,
+        "cost_usd": 0.0001134
+      },
+      {
+        "idx": 93,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2155.2,
+        "tokens_out": 500,
+        "cost_usd": 0.00149667
+      },
+      {
+        "idx": 94,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 314.7,
+        "tokens_out": 70,
+        "cost_usd": 0.00021854
+      },
+      {
+        "idx": 95,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 355.43,
+        "tokens_out": 80,
+        "cost_usd": 0.00024683
+      },
+      {
+        "idx": 96,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.14,
+        "tokens_out": 32,
+        "cost_usd": 0.00010843
+      },
+      {
+        "idx": 97,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.95,
+        "tokens_out": 32,
+        "cost_usd": 0.0001076
+      },
+      {
+        "idx": 98,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1293.32,
+        "tokens_out": 300,
+        "cost_usd": 0.00089814
+      },
+      {
+        "idx": 99,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 83.97,
+        "tokens_out": 16,
+        "cost_usd": 5.831e-05
+      },
+      {
+        "idx": 100,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.21,
+        "tokens_out": 32,
+        "cost_usd": 0.00010709
+      },
+      {
+        "idx": 101,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 159.86,
+        "tokens_out": 32,
+        "cost_usd": 0.00011101
+      },
+      {
+        "idx": 102,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 53.74,
+        "tokens_out": 8,
+        "cost_usd": 3.732e-05
+      },
+      {
+        "idx": 103,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 53.12,
+        "tokens_out": 8,
+        "cost_usd": 3.689e-05
+      },
+      {
+        "idx": 104,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2196.1,
+        "tokens_out": 500,
+        "cost_usd": 0.00152507
+      },
+      {
+        "idx": 105,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1319.93,
+        "tokens_out": 300,
+        "cost_usd": 0.00091661
+      },
+      {
+        "idx": 106,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 366.94,
+        "tokens_out": 80,
+        "cost_usd": 0.00025482
+      },
+      {
+        "idx": 107,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 150.08,
+        "tokens_out": 32,
+        "cost_usd": 0.00010422
+      },
+      {
+        "idx": 108,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 348.19,
+        "tokens_out": 77,
+        "cost_usd": 0.0002418
+      },
+      {
+        "idx": 109,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2273.75,
+        "tokens_out": 500,
+        "cost_usd": 0.00157899
+      },
+      {
+        "idx": 110,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1334.28,
+        "tokens_out": 300,
+        "cost_usd": 0.00092658
+      },
+      {
+        "idx": 111,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 380.33,
+        "tokens_out": 80,
+        "cost_usd": 0.00026412
+      },
+      {
+        "idx": 112,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 52.85,
+        "tokens_out": 8,
+        "cost_usd": 3.67e-05
+      },
+      {
+        "idx": 113,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 381.0,
+        "tokens_out": 80,
+        "cost_usd": 0.00026458
+      },
+      {
+        "idx": 114,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 63.83,
+        "tokens_out": 10,
+        "cost_usd": 4.432e-05
+      },
+      {
+        "idx": 115,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1362.45,
+        "tokens_out": 300,
+        "cost_usd": 0.00094615
+      },
+      {
+        "idx": 116,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 60.18,
+        "tokens_out": 8,
+        "cost_usd": 4.179e-05
+      },
+      {
+        "idx": 117,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 92.32,
+        "tokens_out": 16,
+        "cost_usd": 6.411e-05
+      },
+      {
+        "idx": 118,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 370.29,
+        "tokens_out": 76,
+        "cost_usd": 0.00025715
+      },
+      {
+        "idx": 119,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 171.42,
+        "tokens_out": 32,
+        "cost_usd": 0.00011904
+      },
+      {
+        "idx": 120,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 64.2,
+        "tokens_out": 10,
+        "cost_usd": 4.458e-05
+      },
+      {
+        "idx": 121,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 158.3,
+        "tokens_out": 32,
+        "cost_usd": 0.00010993
+      },
+      {
+        "idx": 122,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 158.26,
+        "tokens_out": 32,
+        "cost_usd": 0.00010991
+      },
+      {
+        "idx": 123,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2327.58,
+        "tokens_out": 500,
+        "cost_usd": 0.00161638
+      },
+      {
+        "idx": 124,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.2,
+        "tokens_out": 32,
+        "cost_usd": 0.00011333
+      },
+      {
+        "idx": 125,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.23,
+        "tokens_out": 32,
+        "cost_usd": 0.00011335
+      },
+      {
+        "idx": 126,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 341.85,
+        "tokens_out": 76,
+        "cost_usd": 0.0002374
+      },
+      {
+        "idx": 127,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2350.82,
+        "tokens_out": 500,
+        "cost_usd": 0.00163251
+      },
+      {
+        "idx": 128,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.34,
+        "tokens_out": 10,
+        "cost_usd": 4.259e-05
+      },
+      {
+        "idx": 129,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1398.02,
+        "tokens_out": 300,
+        "cost_usd": 0.00097085
+      },
+      {
+        "idx": 130,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2369.6,
+        "tokens_out": 500,
+        "cost_usd": 0.00164556
+      },
+      {
+        "idx": 131,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 60.15,
+        "tokens_out": 10,
+        "cost_usd": 4.177e-05
+      },
+      {
+        "idx": 132,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.22,
+        "tokens_out": 10,
+        "cost_usd": 4.252e-05
+      },
+      {
+        "idx": 133,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 170.64,
+        "tokens_out": 32,
+        "cost_usd": 0.0001185
+      },
+      {
+        "idx": 134,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 389.83,
+        "tokens_out": 77,
+        "cost_usd": 0.00027072
+      },
+      {
+        "idx": 135,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1441.06,
+        "tokens_out": 300,
+        "cost_usd": 0.00100074
+      },
+      {
+        "idx": 136,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 52.64,
+        "tokens_out": 8,
+        "cost_usd": 3.655e-05
+      },
+      {
+        "idx": 137,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1453.91,
+        "tokens_out": 300,
+        "cost_usd": 0.00100966
+      },
+      {
+        "idx": 138,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 90.75,
+        "tokens_out": 12,
+        "cost_usd": 6.302e-05
+      },
+      {
+        "idx": 139,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 177.25,
+        "tokens_out": 32,
+        "cost_usd": 0.00012309
+      },
+      {
+        "idx": 140,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1416.87,
+        "tokens_out": 300,
+        "cost_usd": 0.00098393
+      },
+      {
+        "idx": 141,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 167.95,
+        "tokens_out": 32,
+        "cost_usd": 0.00011663
+      },
+      {
+        "idx": 142,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.58,
+        "tokens_out": 32,
+        "cost_usd": 0.0001143
+      },
+      {
+        "idx": 143,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 52.51,
+        "tokens_out": 8,
+        "cost_usd": 3.647e-05
+      },
+      {
+        "idx": 144,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 378.52,
+        "tokens_out": 75,
+        "cost_usd": 0.00026286
+      },
+      {
+        "idx": 145,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 84.41,
+        "tokens_out": 8,
+        "cost_usd": 5.861e-05
+      },
+      {
+        "idx": 146,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2216.55,
+        "tokens_out": 500,
+        "cost_usd": 0.00153927
+      },
+      {
+        "idx": 147,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 179.17,
+        "tokens_out": 32,
+        "cost_usd": 0.00012443
+      },
+      {
+        "idx": 148,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 59.85,
+        "tokens_out": 8,
+        "cost_usd": 4.157e-05
+      },
+      {
+        "idx": 149,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 175.32,
+        "tokens_out": 32,
+        "cost_usd": 0.00012175
+      }
+    ],
+    "B round-robin": [
+      {
+        "idx": 0,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1361.98,
+        "tokens_out": 300,
+        "cost_usd": 0.00094582
+      },
+      {
+        "idx": 1,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 561.62,
+        "tokens_out": 72,
+        "cost_usd": 0.00124804
+      },
+      {
+        "idx": 2,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 216.65,
+        "tokens_out": 32,
+        "cost_usd": 0.00015045
+      },
+      {
+        "idx": 3,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 591.65,
+        "tokens_out": 76,
+        "cost_usd": 0.00131479
+      },
+      {
+        "idx": 4,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 420.65,
+        "tokens_out": 77,
+        "cost_usd": 0.00029212
+      },
+      {
+        "idx": 5,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3323.77,
+        "tokens_out": 500,
+        "cost_usd": 0.00738616
+      },
+      {
+        "idx": 6,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1357.57,
+        "tokens_out": 300,
+        "cost_usd": 0.00094275
+      },
+      {
+        "idx": 7,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 294.79,
+        "tokens_out": 32,
+        "cost_usd": 0.0006551
+      },
+      {
+        "idx": 8,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.18,
+        "tokens_out": 32,
+        "cost_usd": 0.00011401
+      },
+      {
+        "idx": 9,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 246.6,
+        "tokens_out": 32,
+        "cost_usd": 0.000548
+      },
+      {
+        "idx": 10,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 356.64,
+        "tokens_out": 76,
+        "cost_usd": 0.00024767
+      },
+      {
+        "idx": 11,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 544.46,
+        "tokens_out": 80,
+        "cost_usd": 0.0012099
+      },
+      {
+        "idx": 12,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 59.82,
+        "tokens_out": 10,
+        "cost_usd": 4.154e-05
+      },
+      {
+        "idx": 13,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1953.85,
+        "tokens_out": 300,
+        "cost_usd": 0.0043419
+      },
+      {
+        "idx": 14,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 365.82,
+        "tokens_out": 80,
+        "cost_usd": 0.00025404
+      },
+      {
+        "idx": 15,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 81.92,
+        "tokens_out": 10,
+        "cost_usd": 0.00018205
+      },
+      {
+        "idx": 16,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 150.91,
+        "tokens_out": 32,
+        "cost_usd": 0.0001048
+      },
+      {
+        "idx": 17,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 229.57,
+        "tokens_out": 32,
+        "cost_usd": 0.00051015
+      },
+      {
+        "idx": 18,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.81,
+        "tokens_out": 10,
+        "cost_usd": 4.292e-05
+      },
+      {
+        "idx": 19,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.28,
+        "tokens_out": 32,
+        "cost_usd": 0.00050063
+      },
+      {
+        "idx": 20,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1281.36,
+        "tokens_out": 300,
+        "cost_usd": 0.00088983
+      },
+      {
+        "idx": 21,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 540.21,
+        "tokens_out": 80,
+        "cost_usd": 0.00120046
+      },
+      {
+        "idx": 22,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1274.78,
+        "tokens_out": 300,
+        "cost_usd": 0.00088527
+      },
+      {
+        "idx": 23,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.43,
+        "tokens_out": 32,
+        "cost_usd": 0.00050094
+      },
+      {
+        "idx": 24,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 319.16,
+        "tokens_out": 70,
+        "cost_usd": 0.00022164
+      },
+      {
+        "idx": 25,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1963.81,
+        "tokens_out": 300,
+        "cost_usd": 0.00436402
+      },
+      {
+        "idx": 26,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1286.5,
+        "tokens_out": 300,
+        "cost_usd": 0.0008934
+      },
+      {
+        "idx": 27,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 223.41,
+        "tokens_out": 32,
+        "cost_usd": 0.00049647
+      },
+      {
+        "idx": 28,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 356.16,
+        "tokens_out": 80,
+        "cost_usd": 0.00024734
+      },
+      {
+        "idx": 29,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3261.77,
+        "tokens_out": 500,
+        "cost_usd": 0.00724837
+      },
+      {
+        "idx": 30,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2116.96,
+        "tokens_out": 500,
+        "cost_usd": 0.00147011
+      },
+      {
+        "idx": 31,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 228.63,
+        "tokens_out": 32,
+        "cost_usd": 0.00050807
+      },
+      {
+        "idx": 32,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 86.25,
+        "tokens_out": 16,
+        "cost_usd": 5.989e-05
+      },
+      {
+        "idx": 33,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 230.12,
+        "tokens_out": 32,
+        "cost_usd": 0.00051138
+      },
+      {
+        "idx": 34,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 362.14,
+        "tokens_out": 80,
+        "cost_usd": 0.00025149
+      },
+      {
+        "idx": 35,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 527.48,
+        "tokens_out": 77,
+        "cost_usd": 0.00117217
+      },
+      {
+        "idx": 36,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.79,
+        "tokens_out": 32,
+        "cost_usd": 0.00010402
+      },
+      {
+        "idx": 37,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1968.28,
+        "tokens_out": 300,
+        "cost_usd": 0.00437396
+      },
+      {
+        "idx": 38,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.26,
+        "tokens_out": 10,
+        "cost_usd": 4.254e-05
+      },
+      {
+        "idx": 39,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 231.95,
+        "tokens_out": 32,
+        "cost_usd": 0.00051545
+      },
+      {
+        "idx": 40,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 83.58,
+        "tokens_out": 16,
+        "cost_usd": 5.804e-05
+      },
+      {
+        "idx": 41,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 464.53,
+        "tokens_out": 67,
+        "cost_usd": 0.0010323
+      },
+      {
+        "idx": 42,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 362.32,
+        "tokens_out": 79,
+        "cost_usd": 0.00025161
+      },
+      {
+        "idx": 43,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 71.69,
+        "tokens_out": 8,
+        "cost_usd": 0.00015931
+      },
+      {
+        "idx": 44,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 367.02,
+        "tokens_out": 80,
+        "cost_usd": 0.00025488
+      },
+      {
+        "idx": 45,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 70.11,
+        "tokens_out": 8,
+        "cost_usd": 0.00015581
+      },
+      {
+        "idx": 46,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 161.07,
+        "tokens_out": 32,
+        "cost_usd": 0.00011185
+      },
+      {
+        "idx": 47,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3254.8,
+        "tokens_out": 500,
+        "cost_usd": 0.0072329
+      },
+      {
+        "idx": 48,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 59.38,
+        "tokens_out": 10,
+        "cost_usd": 4.123e-05
+      },
+      {
+        "idx": 49,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 83.32,
+        "tokens_out": 10,
+        "cost_usd": 0.00018516
+      },
+      {
+        "idx": 50,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 155.41,
+        "tokens_out": 32,
+        "cost_usd": 0.00010792
+      },
+      {
+        "idx": 51,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 226.19,
+        "tokens_out": 32,
+        "cost_usd": 0.00050264
+      },
+      {
+        "idx": 52,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1237.09,
+        "tokens_out": 300,
+        "cost_usd": 0.00085909
+      },
+      {
+        "idx": 53,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1965.71,
+        "tokens_out": 300,
+        "cost_usd": 0.00436826
+      },
+      {
+        "idx": 54,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.78,
+        "tokens_out": 32,
+        "cost_usd": 0.00010402
+      },
+      {
+        "idx": 55,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3267.99,
+        "tokens_out": 500,
+        "cost_usd": 0.0072622
+      },
+      {
+        "idx": 56,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1231.86,
+        "tokens_out": 300,
+        "cost_usd": 0.00085546
+      },
+      {
+        "idx": 57,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 529.8,
+        "tokens_out": 77,
+        "cost_usd": 0.00117734
+      },
+      {
+        "idx": 58,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2066.65,
+        "tokens_out": 500,
+        "cost_usd": 0.00143518
+      },
+      {
+        "idx": 59,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1956.12,
+        "tokens_out": 300,
+        "cost_usd": 0.00434694
+      },
+      {
+        "idx": 60,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 54.19,
+        "tokens_out": 8,
+        "cost_usd": 3.763e-05
+      },
+      {
+        "idx": 61,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 227.53,
+        "tokens_out": 32,
+        "cost_usd": 0.00050563
+      },
+      {
+        "idx": 62,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2077.57,
+        "tokens_out": 500,
+        "cost_usd": 0.00144276
+      },
+      {
+        "idx": 63,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 226.95,
+        "tokens_out": 32,
+        "cost_usd": 0.00050434
+      },
+      {
+        "idx": 64,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2076.14,
+        "tokens_out": 500,
+        "cost_usd": 0.00144177
+      },
+      {
+        "idx": 65,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 486.52,
+        "tokens_out": 71,
+        "cost_usd": 0.00108116
+      },
+      {
+        "idx": 66,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.27,
+        "tokens_out": 32,
+        "cost_usd": 0.00010366
+      },
+      {
+        "idx": 67,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 516.66,
+        "tokens_out": 76,
+        "cost_usd": 0.00114814
+      },
+      {
+        "idx": 68,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 355.07,
+        "tokens_out": 80,
+        "cost_usd": 0.00024658
+      },
+      {
+        "idx": 69,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.64,
+        "tokens_out": 32,
+        "cost_usd": 0.00050141
+      },
+      {
+        "idx": 70,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 62.49,
+        "tokens_out": 10,
+        "cost_usd": 4.34e-05
+      },
+      {
+        "idx": 71,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.15,
+        "tokens_out": 32,
+        "cost_usd": 0.00050033
+      },
+      {
+        "idx": 72,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2118.81,
+        "tokens_out": 500,
+        "cost_usd": 0.0014714
+      },
+      {
+        "idx": 73,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1968.66,
+        "tokens_out": 300,
+        "cost_usd": 0.0043748
+      },
+      {
+        "idx": 74,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2141.52,
+        "tokens_out": 500,
+        "cost_usd": 0.00148717
+      },
+      {
+        "idx": 75,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 525.09,
+        "tokens_out": 72,
+        "cost_usd": 0.00116686
+      },
+      {
+        "idx": 76,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1277.41,
+        "tokens_out": 300,
+        "cost_usd": 0.00088709
+      },
+      {
+        "idx": 77,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 244.0,
+        "tokens_out": 32,
+        "cost_usd": 0.00054222
+      },
+      {
+        "idx": 78,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1284.37,
+        "tokens_out": 300,
+        "cost_usd": 0.00089192
+      },
+      {
+        "idx": 79,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3217.59,
+        "tokens_out": 500,
+        "cost_usd": 0.0071502
+      },
+      {
+        "idx": 80,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 52.79,
+        "tokens_out": 8,
+        "cost_usd": 3.666e-05
+      },
+      {
+        "idx": 81,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 226.67,
+        "tokens_out": 32,
+        "cost_usd": 0.00050371
+      },
+      {
+        "idx": 82,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2124.89,
+        "tokens_out": 500,
+        "cost_usd": 0.00147562
+      },
+      {
+        "idx": 83,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 222.64,
+        "tokens_out": 32,
+        "cost_usd": 0.00049476
+      },
+      {
+        "idx": 84,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2132.34,
+        "tokens_out": 500,
+        "cost_usd": 0.00148079
+      },
+      {
+        "idx": 85,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 85.04,
+        "tokens_out": 10,
+        "cost_usd": 0.00018899
+      },
+      {
+        "idx": 86,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 325.05,
+        "tokens_out": 70,
+        "cost_usd": 0.00022573
+      },
+      {
+        "idx": 87,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3235.22,
+        "tokens_out": 500,
+        "cost_usd": 0.00718938
+      },
+      {
+        "idx": 88,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 360.86,
+        "tokens_out": 78,
+        "cost_usd": 0.0002506
+      },
+      {
+        "idx": 89,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 82.39,
+        "tokens_out": 10,
+        "cost_usd": 0.00018309
+      },
+      {
+        "idx": 90,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2108.03,
+        "tokens_out": 500,
+        "cost_usd": 0.00146391
+      },
+      {
+        "idx": 91,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 223.14,
+        "tokens_out": 32,
+        "cost_usd": 0.00049588
+      },
+      {
+        "idx": 92,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.96,
+        "tokens_out": 32,
+        "cost_usd": 0.00011386
+      },
+      {
+        "idx": 93,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3240.95,
+        "tokens_out": 500,
+        "cost_usd": 0.00720211
+      },
+      {
+        "idx": 94,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 338.14,
+        "tokens_out": 76,
+        "cost_usd": 0.00023482
+      },
+      {
+        "idx": 95,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 542.97,
+        "tokens_out": 80,
+        "cost_usd": 0.00120661
+      },
+      {
+        "idx": 96,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 85.03,
+        "tokens_out": 16,
+        "cost_usd": 5.905e-05
+      },
+      {
+        "idx": 97,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 230.11,
+        "tokens_out": 32,
+        "cost_usd": 0.00051136
+      },
+      {
+        "idx": 98,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1270.59,
+        "tokens_out": 300,
+        "cost_usd": 0.00088235
+      },
+      {
+        "idx": 99,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 222.98,
+        "tokens_out": 32,
+        "cost_usd": 0.00049552
+      },
+      {
+        "idx": 100,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.79,
+        "tokens_out": 32,
+        "cost_usd": 0.00010402
+      },
+      {
+        "idx": 101,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 228.01,
+        "tokens_out": 32,
+        "cost_usd": 0.00050669
+      },
+      {
+        "idx": 102,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 53.87,
+        "tokens_out": 8,
+        "cost_usd": 3.741e-05
+      },
+      {
+        "idx": 103,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 74.6,
+        "tokens_out": 8,
+        "cost_usd": 0.00016577
+      },
+      {
+        "idx": 104,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2092.63,
+        "tokens_out": 500,
+        "cost_usd": 0.00145322
+      },
+      {
+        "idx": 105,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1956.57,
+        "tokens_out": 300,
+        "cost_usd": 0.00434794
+      },
+      {
+        "idx": 106,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 354.46,
+        "tokens_out": 80,
+        "cost_usd": 0.00024615
+      },
+      {
+        "idx": 107,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 227.42,
+        "tokens_out": 32,
+        "cost_usd": 0.00050537
+      },
+      {
+        "idx": 108,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 328.37,
+        "tokens_out": 72,
+        "cost_usd": 0.00022803
+      },
+      {
+        "idx": 109,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3257.58,
+        "tokens_out": 500,
+        "cost_usd": 0.00723906
+      },
+      {
+        "idx": 110,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1256.15,
+        "tokens_out": 300,
+        "cost_usd": 0.00087233
+      },
+      {
+        "idx": 111,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 511.39,
+        "tokens_out": 74,
+        "cost_usd": 0.00113642
+      },
+      {
+        "idx": 112,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 52.7,
+        "tokens_out": 8,
+        "cost_usd": 3.66e-05
+      },
+      {
+        "idx": 113,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 491.65,
+        "tokens_out": 71,
+        "cost_usd": 0.00109257
+      },
+      {
+        "idx": 114,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 59.08,
+        "tokens_out": 10,
+        "cost_usd": 4.103e-05
+      },
+      {
+        "idx": 115,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1961.31,
+        "tokens_out": 300,
+        "cost_usd": 0.00435846
+      },
+      {
+        "idx": 116,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 54.08,
+        "tokens_out": 8,
+        "cost_usd": 3.755e-05
+      },
+      {
+        "idx": 117,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 229.34,
+        "tokens_out": 32,
+        "cost_usd": 0.00050964
+      },
+      {
+        "idx": 118,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 347.25,
+        "tokens_out": 77,
+        "cost_usd": 0.00024115
+      },
+      {
+        "idx": 119,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.12,
+        "tokens_out": 32,
+        "cost_usd": 0.00050027
+      },
+      {
+        "idx": 120,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 63.59,
+        "tokens_out": 10,
+        "cost_usd": 4.416e-05
+      },
+      {
+        "idx": 121,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 228.23,
+        "tokens_out": 32,
+        "cost_usd": 0.00050718
+      },
+      {
+        "idx": 122,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 153.3,
+        "tokens_out": 32,
+        "cost_usd": 0.00010646
+      },
+      {
+        "idx": 123,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3243.74,
+        "tokens_out": 500,
+        "cost_usd": 0.00720832
+      },
+      {
+        "idx": 124,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 151.91,
+        "tokens_out": 32,
+        "cost_usd": 0.00010549
+      },
+      {
+        "idx": 125,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 229.99,
+        "tokens_out": 32,
+        "cost_usd": 0.0005111
+      },
+      {
+        "idx": 126,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 356.5,
+        "tokens_out": 80,
+        "cost_usd": 0.00024757
+      },
+      {
+        "idx": 127,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 3236.39,
+        "tokens_out": 500,
+        "cost_usd": 0.00719197
+      },
+      {
+        "idx": 128,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 62.86,
+        "tokens_out": 10,
+        "cost_usd": 4.365e-05
+      },
+      {
+        "idx": 129,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1963.2,
+        "tokens_out": 300,
+        "cost_usd": 0.00436266
+      },
+      {
+        "idx": 130,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2019.21,
+        "tokens_out": 500,
+        "cost_usd": 0.00140223
+      },
+      {
+        "idx": 131,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 84.2,
+        "tokens_out": 10,
+        "cost_usd": 0.0001871
+      },
+      {
+        "idx": 132,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.88,
+        "tokens_out": 10,
+        "cost_usd": 4.089e-05
+      },
+      {
+        "idx": 133,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 225.71,
+        "tokens_out": 32,
+        "cost_usd": 0.00050158
+      },
+      {
+        "idx": 134,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 314.81,
+        "tokens_out": 71,
+        "cost_usd": 0.00021862
+      },
+      {
+        "idx": 135,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1961.87,
+        "tokens_out": 300,
+        "cost_usd": 0.0043597
+      },
+      {
+        "idx": 136,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 51.56,
+        "tokens_out": 8,
+        "cost_usd": 3.581e-05
+      },
+      {
+        "idx": 137,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1962.41,
+        "tokens_out": 300,
+        "cost_usd": 0.00436092
+      },
+      {
+        "idx": 138,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 147.4,
+        "tokens_out": 32,
+        "cost_usd": 0.00010236
+      },
+      {
+        "idx": 139,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 228.61,
+        "tokens_out": 32,
+        "cost_usd": 0.00050803
+      },
+      {
+        "idx": 140,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1247.59,
+        "tokens_out": 300,
+        "cost_usd": 0.00086638
+      },
+      {
+        "idx": 141,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 227.04,
+        "tokens_out": 32,
+        "cost_usd": 0.00050454
+      },
+      {
+        "idx": 142,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 149.14,
+        "tokens_out": 32,
+        "cost_usd": 0.00010357
+      },
+      {
+        "idx": 143,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 70.49,
+        "tokens_out": 8,
+        "cost_usd": 0.00015665
+      },
+      {
+        "idx": 144,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 361.37,
+        "tokens_out": 80,
+        "cost_usd": 0.00025095
+      },
+      {
+        "idx": 145,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 71.09,
+        "tokens_out": 8,
+        "cost_usd": 0.00015797
+      },
+      {
+        "idx": 146,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1951.96,
+        "tokens_out": 500,
+        "cost_usd": 0.00135553
+      },
+      {
+        "idx": 147,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 226.41,
+        "tokens_out": 32,
+        "cost_usd": 0.00050314
+      },
+      {
+        "idx": 148,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 51.7,
+        "tokens_out": 8,
+        "cost_usd": 3.59e-05
+      },
+      {
+        "idx": 149,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 228.4,
+        "tokens_out": 32,
+        "cost_usd": 0.00050755
+      }
+    ],
+    "C router": [
+      {
+        "idx": 0,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1977.6,
+        "tokens_out": 300,
+        "cost_usd": 0.00439466
+      },
+      {
+        "idx": 1,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 424.71,
+        "tokens_out": 80,
+        "cost_usd": 0.00029494
+      },
+      {
+        "idx": 2,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 217.86,
+        "tokens_out": 32,
+        "cost_usd": 0.00015129
+      },
+      {
+        "idx": 3,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 390.05,
+        "tokens_out": 72,
+        "cost_usd": 0.00027087
+      },
+      {
+        "idx": 4,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 408.93,
+        "tokens_out": 77,
+        "cost_usd": 0.00028398
+      },
+      {
+        "idx": 5,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2150.76,
+        "tokens_out": 500,
+        "cost_usd": 0.00149359
+      },
+      {
+        "idx": 6,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1973.69,
+        "tokens_out": 300,
+        "cost_usd": 0.00438597
+      },
+      {
+        "idx": 7,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 214.99,
+        "tokens_out": 32,
+        "cost_usd": 0.0001493
+      },
+      {
+        "idx": 8,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 169.71,
+        "tokens_out": 32,
+        "cost_usd": 0.00011785
+      },
+      {
+        "idx": 9,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 168.74,
+        "tokens_out": 32,
+        "cost_usd": 0.00011718
+      },
+      {
+        "idx": 10,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 386.2,
+        "tokens_out": 75,
+        "cost_usd": 0.00026819
+      },
+      {
+        "idx": 11,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 418.1,
+        "tokens_out": 80,
+        "cost_usd": 0.00029035
+      },
+      {
+        "idx": 12,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 92.6,
+        "tokens_out": 10,
+        "cost_usd": 6.43e-05
+      },
+      {
+        "idx": 13,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1963.39,
+        "tokens_out": 300,
+        "cost_usd": 0.0043631
+      },
+      {
+        "idx": 14,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 344.79,
+        "tokens_out": 70,
+        "cost_usd": 0.00023944
+      },
+      {
+        "idx": 15,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.87,
+        "tokens_out": 10,
+        "cost_usd": 4.783e-05
+      },
+      {
+        "idx": 16,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 162.04,
+        "tokens_out": 32,
+        "cost_usd": 0.00011253
+      },
+      {
+        "idx": 17,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 102.61,
+        "tokens_out": 16,
+        "cost_usd": 7.126e-05
+      },
+      {
+        "idx": 18,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 80.72,
+        "tokens_out": 10,
+        "cost_usd": 5.605e-05
+      },
+      {
+        "idx": 19,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 103.53,
+        "tokens_out": 16,
+        "cost_usd": 7.19e-05
+      },
+      {
+        "idx": 20,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1964.12,
+        "tokens_out": 300,
+        "cost_usd": 0.00436472
+      },
+      {
+        "idx": 21,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 369.84,
+        "tokens_out": 80,
+        "cost_usd": 0.00025683
+      },
+      {
+        "idx": 22,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1964.81,
+        "tokens_out": 300,
+        "cost_usd": 0.00436624
+      },
+      {
+        "idx": 23,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 90.84,
+        "tokens_out": 16,
+        "cost_usd": 6.308e-05
+      },
+      {
+        "idx": 24,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 336.63,
+        "tokens_out": 75,
+        "cost_usd": 0.00023377
+      },
+      {
+        "idx": 25,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1958.27,
+        "tokens_out": 300,
+        "cost_usd": 0.00435172
+      },
+      {
+        "idx": 26,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1954.23,
+        "tokens_out": 300,
+        "cost_usd": 0.00434273
+      },
+      {
+        "idx": 27,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 167.37,
+        "tokens_out": 32,
+        "cost_usd": 0.00011623
+      },
+      {
+        "idx": 28,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 330.05,
+        "tokens_out": 71,
+        "cost_usd": 0.0002292
+      },
+      {
+        "idx": 29,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2206.68,
+        "tokens_out": 500,
+        "cost_usd": 0.00153242
+      },
+      {
+        "idx": 30,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2206.02,
+        "tokens_out": 500,
+        "cost_usd": 0.00153196
+      },
+      {
+        "idx": 31,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 93.33,
+        "tokens_out": 16,
+        "cost_usd": 6.481e-05
+      },
+      {
+        "idx": 32,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 92.55,
+        "tokens_out": 16,
+        "cost_usd": 6.427e-05
+      },
+      {
+        "idx": 33,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 159.37,
+        "tokens_out": 32,
+        "cost_usd": 0.00011067
+      },
+      {
+        "idx": 34,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 354.84,
+        "tokens_out": 76,
+        "cost_usd": 0.00024641
+      },
+      {
+        "idx": 35,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 375.2,
+        "tokens_out": 80,
+        "cost_usd": 0.00026055
+      },
+      {
+        "idx": 36,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 169.18,
+        "tokens_out": 32,
+        "cost_usd": 0.00011748
+      },
+      {
+        "idx": 37,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1943.96,
+        "tokens_out": 300,
+        "cost_usd": 0.00431991
+      },
+      {
+        "idx": 38,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 67.25,
+        "tokens_out": 10,
+        "cost_usd": 4.67e-05
+      },
+      {
+        "idx": 39,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 176.85,
+        "tokens_out": 32,
+        "cost_usd": 0.00012281
+      },
+      {
+        "idx": 40,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 98.58,
+        "tokens_out": 16,
+        "cost_usd": 6.846e-05
+      },
+      {
+        "idx": 41,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 382.93,
+        "tokens_out": 76,
+        "cost_usd": 0.00026592
+      },
+      {
+        "idx": 42,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 382.79,
+        "tokens_out": 73,
+        "cost_usd": 0.00026582
+      },
+      {
+        "idx": 43,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 57.61,
+        "tokens_out": 8,
+        "cost_usd": 4.001e-05
+      },
+      {
+        "idx": 44,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 407.45,
+        "tokens_out": 80,
+        "cost_usd": 0.00028295
+      },
+      {
+        "idx": 45,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 61.39,
+        "tokens_out": 8,
+        "cost_usd": 4.263e-05
+      },
+      {
+        "idx": 46,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 171.74,
+        "tokens_out": 32,
+        "cost_usd": 0.00011926
+      },
+      {
+        "idx": 47,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2129.7,
+        "tokens_out": 500,
+        "cost_usd": 0.00147896
+      },
+      {
+        "idx": 48,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 67.96,
+        "tokens_out": 10,
+        "cost_usd": 4.72e-05
+      },
+      {
+        "idx": 49,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 79.52,
+        "tokens_out": 10,
+        "cost_usd": 5.522e-05
+      },
+      {
+        "idx": 50,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.75,
+        "tokens_out": 32,
+        "cost_usd": 0.00011372
+      },
+      {
+        "idx": 51,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.45,
+        "tokens_out": 32,
+        "cost_usd": 0.0001142
+      },
+      {
+        "idx": 52,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1957.06,
+        "tokens_out": 300,
+        "cost_usd": 0.00434902
+      },
+      {
+        "idx": 53,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1955.1,
+        "tokens_out": 300,
+        "cost_usd": 0.00434466
+      },
+      {
+        "idx": 54,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 157.45,
+        "tokens_out": 32,
+        "cost_usd": 0.00010934
+      },
+      {
+        "idx": 55,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2119.0,
+        "tokens_out": 500,
+        "cost_usd": 0.00147153
+      },
+      {
+        "idx": 56,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1951.75,
+        "tokens_out": 300,
+        "cost_usd": 0.00433723
+      },
+      {
+        "idx": 57,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 365.8,
+        "tokens_out": 80,
+        "cost_usd": 0.00025402
+      },
+      {
+        "idx": 58,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2173.91,
+        "tokens_out": 500,
+        "cost_usd": 0.00150966
+      },
+      {
+        "idx": 59,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1918.39,
+        "tokens_out": 300,
+        "cost_usd": 0.00426308
+      },
+      {
+        "idx": 60,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.62,
+        "tokens_out": 8,
+        "cost_usd": 4.071e-05
+      },
+      {
+        "idx": 61,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.86,
+        "tokens_out": 32,
+        "cost_usd": 0.00010754
+      },
+      {
+        "idx": 62,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2170.61,
+        "tokens_out": 500,
+        "cost_usd": 0.00150737
+      },
+      {
+        "idx": 63,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.87,
+        "tokens_out": 32,
+        "cost_usd": 0.0001138
+      },
+      {
+        "idx": 64,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2185.46,
+        "tokens_out": 500,
+        "cost_usd": 0.00151768
+      },
+      {
+        "idx": 65,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 357.96,
+        "tokens_out": 70,
+        "cost_usd": 0.00024858
+      },
+      {
+        "idx": 66,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 167.52,
+        "tokens_out": 32,
+        "cost_usd": 0.00011633
+      },
+      {
+        "idx": 67,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 391.96,
+        "tokens_out": 79,
+        "cost_usd": 0.0002722
+      },
+      {
+        "idx": 68,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 364.25,
+        "tokens_out": 75,
+        "cost_usd": 0.00025295
+      },
+      {
+        "idx": 69,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 95.22,
+        "tokens_out": 16,
+        "cost_usd": 6.613e-05
+      },
+      {
+        "idx": 70,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 74.0,
+        "tokens_out": 10,
+        "cost_usd": 5.139e-05
+      },
+      {
+        "idx": 71,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 76.75,
+        "tokens_out": 12,
+        "cost_usd": 5.33e-05
+      },
+      {
+        "idx": 72,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2157.39,
+        "tokens_out": 500,
+        "cost_usd": 0.00149819
+      },
+      {
+        "idx": 73,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1931.39,
+        "tokens_out": 300,
+        "cost_usd": 0.00429199
+      },
+      {
+        "idx": 74,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2162.49,
+        "tokens_out": 500,
+        "cost_usd": 0.00150173
+      },
+      {
+        "idx": 75,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 372.29,
+        "tokens_out": 80,
+        "cost_usd": 0.00025853
+      },
+      {
+        "idx": 76,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1933.24,
+        "tokens_out": 300,
+        "cost_usd": 0.00429609
+      },
+      {
+        "idx": 77,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 160.19,
+        "tokens_out": 32,
+        "cost_usd": 0.00011124
+      },
+      {
+        "idx": 78,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1833.63,
+        "tokens_out": 285,
+        "cost_usd": 0.00407474
+      },
+      {
+        "idx": 79,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2172.32,
+        "tokens_out": 500,
+        "cost_usd": 0.00150856
+      },
+      {
+        "idx": 80,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.08,
+        "tokens_out": 8,
+        "cost_usd": 4.034e-05
+      },
+      {
+        "idx": 81,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 91.8,
+        "tokens_out": 16,
+        "cost_usd": 6.375e-05
+      },
+      {
+        "idx": 82,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2195.64,
+        "tokens_out": 500,
+        "cost_usd": 0.00152475
+      },
+      {
+        "idx": 83,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.95,
+        "tokens_out": 32,
+        "cost_usd": 0.00010899
+      },
+      {
+        "idx": 84,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2204.79,
+        "tokens_out": 500,
+        "cost_usd": 0.0015311
+      },
+      {
+        "idx": 85,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 67.89,
+        "tokens_out": 10,
+        "cost_usd": 4.715e-05
+      },
+      {
+        "idx": 86,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 370.06,
+        "tokens_out": 77,
+        "cost_usd": 0.00025699
+      },
+      {
+        "idx": 87,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2207.96,
+        "tokens_out": 500,
+        "cost_usd": 0.00153331
+      },
+      {
+        "idx": 88,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 387.93,
+        "tokens_out": 80,
+        "cost_usd": 0.0002694
+      },
+      {
+        "idx": 89,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.69,
+        "tokens_out": 10,
+        "cost_usd": 4.77e-05
+      },
+      {
+        "idx": 90,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2195.7,
+        "tokens_out": 500,
+        "cost_usd": 0.00152479
+      },
+      {
+        "idx": 91,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 165.15,
+        "tokens_out": 32,
+        "cost_usd": 0.00011469
+      },
+      {
+        "idx": 92,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.75,
+        "tokens_out": 32,
+        "cost_usd": 0.00011372
+      },
+      {
+        "idx": 93,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2200.89,
+        "tokens_out": 500,
+        "cost_usd": 0.0015284
+      },
+      {
+        "idx": 94,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 376.51,
+        "tokens_out": 80,
+        "cost_usd": 0.00026147
+      },
+      {
+        "idx": 95,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 366.47,
+        "tokens_out": 80,
+        "cost_usd": 0.00025449
+      },
+      {
+        "idx": 96,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 90.42,
+        "tokens_out": 16,
+        "cost_usd": 6.279e-05
+      },
+      {
+        "idx": 97,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 169.83,
+        "tokens_out": 32,
+        "cost_usd": 0.00011794
+      },
+      {
+        "idx": 98,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1906.8,
+        "tokens_out": 300,
+        "cost_usd": 0.00423733
+      },
+      {
+        "idx": 99,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 93.26,
+        "tokens_out": 16,
+        "cost_usd": 6.476e-05
+      },
+      {
+        "idx": 100,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.38,
+        "tokens_out": 32,
+        "cost_usd": 0.00011415
+      },
+      {
+        "idx": 101,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.93,
+        "tokens_out": 32,
+        "cost_usd": 0.00011454
+      },
+      {
+        "idx": 102,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 64.33,
+        "tokens_out": 8,
+        "cost_usd": 4.467e-05
+      },
+      {
+        "idx": 103,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 59.52,
+        "tokens_out": 8,
+        "cost_usd": 4.133e-05
+      },
+      {
+        "idx": 104,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2211.79,
+        "tokens_out": 500,
+        "cost_usd": 0.00153597
+      },
+      {
+        "idx": 105,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1927.61,
+        "tokens_out": 300,
+        "cost_usd": 0.00428357
+      },
+      {
+        "idx": 106,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 373.07,
+        "tokens_out": 80,
+        "cost_usd": 0.00025908
+      },
+      {
+        "idx": 107,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 164.12,
+        "tokens_out": 32,
+        "cost_usd": 0.00011397
+      },
+      {
+        "idx": 108,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 346.89,
+        "tokens_out": 73,
+        "cost_usd": 0.0002409
+      },
+      {
+        "idx": 109,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2210.77,
+        "tokens_out": 500,
+        "cost_usd": 0.00153526
+      },
+      {
+        "idx": 110,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1938.08,
+        "tokens_out": 300,
+        "cost_usd": 0.00430684
+      },
+      {
+        "idx": 111,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 379.12,
+        "tokens_out": 80,
+        "cost_usd": 0.00026328
+      },
+      {
+        "idx": 112,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.2,
+        "tokens_out": 8,
+        "cost_usd": 4.042e-05
+      },
+      {
+        "idx": 113,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 377.12,
+        "tokens_out": 78,
+        "cost_usd": 0.00026189
+      },
+      {
+        "idx": 114,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 66.84,
+        "tokens_out": 10,
+        "cost_usd": 4.641e-05
+      },
+      {
+        "idx": 115,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1937.98,
+        "tokens_out": 300,
+        "cost_usd": 0.00430662
+      },
+      {
+        "idx": 116,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.16,
+        "tokens_out": 8,
+        "cost_usd": 4.039e-05
+      },
+      {
+        "idx": 117,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 76.2,
+        "tokens_out": 12,
+        "cost_usd": 5.292e-05
+      },
+      {
+        "idx": 118,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 393.25,
+        "tokens_out": 80,
+        "cost_usd": 0.00027309
+      },
+      {
+        "idx": 119,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 175.94,
+        "tokens_out": 32,
+        "cost_usd": 0.00012218
+      },
+      {
+        "idx": 120,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.39,
+        "tokens_out": 10,
+        "cost_usd": 4.749e-05
+      },
+      {
+        "idx": 121,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 166.41,
+        "tokens_out": 32,
+        "cost_usd": 0.00011556
+      },
+      {
+        "idx": 122,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 163.41,
+        "tokens_out": 32,
+        "cost_usd": 0.00011348
+      },
+      {
+        "idx": 123,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2155.08,
+        "tokens_out": 500,
+        "cost_usd": 0.00149659
+      },
+      {
+        "idx": 124,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 170.36,
+        "tokens_out": 32,
+        "cost_usd": 0.00011831
+      },
+      {
+        "idx": 125,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 165.45,
+        "tokens_out": 32,
+        "cost_usd": 0.00011489
+      },
+      {
+        "idx": 126,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 357.19,
+        "tokens_out": 76,
+        "cost_usd": 0.00024805
+      },
+      {
+        "idx": 127,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2162.62,
+        "tokens_out": 500,
+        "cost_usd": 0.00150182
+      },
+      {
+        "idx": 128,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 68.08,
+        "tokens_out": 10,
+        "cost_usd": 4.728e-05
+      },
+      {
+        "idx": 129,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1940.29,
+        "tokens_out": 300,
+        "cost_usd": 0.00431176
+      },
+      {
+        "idx": 130,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 2152.68,
+        "tokens_out": 500,
+        "cost_usd": 0.00149492
+      },
+      {
+        "idx": 131,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 66.65,
+        "tokens_out": 10,
+        "cost_usd": 4.628e-05
+      },
+      {
+        "idx": 132,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 67.07,
+        "tokens_out": 10,
+        "cost_usd": 4.657e-05
+      },
+      {
+        "idx": 133,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 158.18,
+        "tokens_out": 32,
+        "cost_usd": 0.00010985
+      },
+      {
+        "idx": 134,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 374.52,
+        "tokens_out": 80,
+        "cost_usd": 0.00026009
+      },
+      {
+        "idx": 135,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1941.55,
+        "tokens_out": 300,
+        "cost_usd": 0.00431455
+      },
+      {
+        "idx": 136,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 58.78,
+        "tokens_out": 8,
+        "cost_usd": 4.082e-05
+      },
+      {
+        "idx": 137,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1939.96,
+        "tokens_out": 300,
+        "cost_usd": 0.00431103
+      },
+      {
+        "idx": 138,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 90.01,
+        "tokens_out": 16,
+        "cost_usd": 6.251e-05
+      },
+      {
+        "idx": 139,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 154.28,
+        "tokens_out": 32,
+        "cost_usd": 0.00010714
+      },
+      {
+        "idx": 140,
+        "shape": "reasoning",
+        "slo_ms": 12000,
+        "endpoint_used": "vllm-quality",
+        "ok": true,
+        "latency_ms": 1928.29,
+        "tokens_out": 300,
+        "cost_usd": 0.00428509
+      },
+      {
+        "idx": 141,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.63,
+        "tokens_out": 32,
+        "cost_usd": 0.00010877
+      },
+      {
+        "idx": 142,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 153.32,
+        "tokens_out": 32,
+        "cost_usd": 0.00010647
+      },
+      {
+        "idx": 143,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 57.58,
+        "tokens_out": 8,
+        "cost_usd": 3.998e-05
+      },
+      {
+        "idx": 144,
+        "shape": "prefill_heavy",
+        "slo_ms": 8000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 340.3,
+        "tokens_out": 75,
+        "cost_usd": 0.00023632
+      },
+      {
+        "idx": 145,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 63.08,
+        "tokens_out": 8,
+        "cost_usd": 4.381e-05
+      },
+      {
+        "idx": 146,
+        "shape": "decode_heavy",
+        "slo_ms": 15000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 1953.9,
+        "tokens_out": 500,
+        "cost_usd": 0.00135687
+      },
+      {
+        "idx": 147,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 168.82,
+        "tokens_out": 32,
+        "cost_usd": 0.00011724
+      },
+      {
+        "idx": 148,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 60.67,
+        "tokens_out": 8,
+        "cost_usd": 4.213e-05
+      },
+      {
+        "idx": 149,
+        "shape": "short_chat",
+        "slo_ms": 3000,
+        "endpoint_used": "vllm-fast",
+        "ok": true,
+        "latency_ms": 156.58,
+        "tokens_out": 32,
+        "cost_usd": 0.00010874
+      }
+    ]
+  }
 }
