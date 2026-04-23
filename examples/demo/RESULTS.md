@@ -72,6 +72,8 @@ the next point.
 Results — concurrency 32 (n=200)
 --------------------------------
 
+![TokenFlow Router vs direct and round-robin at concurrency 32](benchmark_chart.png)
+
 Realistic multi-tenant load. This is where routing strategy matters.
 
 | Arm             |  RPS  | p50 ms | p95 ms | p99 ms | SLO miss % | $ total | $/1k tok |
