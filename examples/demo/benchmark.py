@@ -219,10 +219,33 @@ class Result:
     tokens_out: int = 0
 
 
+_RATE_STATE: dict[str, Any] = {"rate": 0.0, "last_dispatch": 0.0, "lock": None}
+
+
+async def _rate_gate() -> None:
+    """Rate-limit dispatches to at most `--rate` requests/sec across all arms.
+    Called once before each outbound HTTP request. Uses a simple
+    token-bucket-ish spacing: the next dispatch can happen
+    `1/rate` seconds after the previous one."""
+    rate = _RATE_STATE["rate"]
+    if rate <= 0:
+        return
+    if _RATE_STATE["lock"] is None:
+        _RATE_STATE["lock"] = asyncio.Lock()
+    async with _RATE_STATE["lock"]:
+        now = time.perf_counter()
+        interval = 1.0 / rate
+        gap = now - _RATE_STATE["last_dispatch"]
+        if gap < interval:
+            await asyncio.sleep(interval - gap)
+        _RATE_STATE["last_dispatch"] = time.perf_counter()
+
+
 async def call_openai(
     client: httpx.AsyncClient, url: str, model: str, body: dict[str, Any],
     headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, Any] | None, float]:
+    await _rate_gate()
     t0 = time.perf_counter()
     try:
         r = await client.post(
@@ -508,9 +531,14 @@ async def main_async(args):
     # Configure noise sources before generating workload
     _INTENT_NOISE["fraction"] = args.intent_noise
     _INTENT_NOISE["rng"] = random.Random(args.seed + 2)
+    _RATE_STATE["rate"] = args.rate
     workload = build_workload(args.n, args.seed, workload_noise=args.workload_noise)
     if args.intent_noise or args.workload_noise:
         print(f"[noise] intent={args.intent_noise:.2f}  workload={args.workload_noise:.2f}")
+    if args.rate > 0:
+        est_runtime = args.n / args.rate
+        print(f"[rate-limited] {args.rate} req/s globally → ~{est_runtime:.0f}s per arm "
+              f"({est_runtime/60:.1f} min)")
 
     # probe health — router is required, other backends are advisory
     # (they may be dormant / offline in the on-demand spin-up scenario)
@@ -542,6 +570,14 @@ async def main_async(args):
     ]
     if args.spec:
         plan.append(("E spec-decode",        arm_spec_decode))
+    # Optional arm selector — accept a comma-separated list of arm letters
+    # to restrict the run, e.g. --only C,D for just intent vs router.
+    if args.only:
+        keep = {a.strip().upper() for a in args.only.split(",") if a.strip()}
+        plan = [(n, fn) for (n, fn) in plan if n.split()[0] in keep]
+        if not plan:
+            print(f"[error] --only {args.only} selected no arms", file=sys.stderr)
+            sys.exit(1)
     for arm_name, fn in plan:
         print(f"\n>> Running arm: {arm_name} ({args.n} requests, concurrency={args.concurrency})")
         t0 = time.perf_counter()
@@ -605,6 +641,13 @@ def main():
     ap.add_argument("--workload-noise", type=float, default=0.0,
                     help="fraction [0,1] of requests sent with a misleading max_tokens, "
                          "which confuses TokenFlow's workload_type inference")
+    ap.add_argument("--only", default=None,
+                    help="comma-separated list of arm letters to run, e.g. 'C,D' "
+                         "to run only intent-based and router")
+    ap.add_argument("--rate", type=float, default=0.0,
+                    help="optional rate limit in requests/sec (0 = unlimited). Use this "
+                         "to extend the benchmark runtime, e.g. --rate 3 --n 3000 for "
+                         "~1000s of runtime.")
     args = ap.parse_args()
     asyncio.run(main_async(args))
 

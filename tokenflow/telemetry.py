@@ -13,6 +13,7 @@ import structlog
 
 from tokenflow.adapters.dynamo.client import DynamoClient
 from tokenflow.adapters.nim.client import NIMClient
+from tokenflow.adapters.ollama.client import OllamaClient
 from tokenflow.adapters.sglang.client import SGLangClient
 from tokenflow.adapters.vllm.client import VLLMClient
 from tokenflow.config import settings
@@ -153,6 +154,7 @@ class TelemetryCollector:
         self._vllm_client: Optional[VLLMClient] = None
         self._sglang_client: Optional[SGLangClient] = None
         self._dynamo_client: Optional[DynamoClient] = None
+        self._ollama_client: Optional[OllamaClient] = None
 
     def register_endpoint(self, ep: EndpointProfile) -> None:
         if not any(e.id == ep.id for e in self._endpoints):
@@ -166,6 +168,7 @@ class TelemetryCollector:
         self._vllm_client = VLLMClient(timeout=5.0)
         self._sglang_client = SGLangClient(timeout=8.0)  # health_generate can be slower
         self._dynamo_client = DynamoClient(timeout=5.0)
+        self._ollama_client = OllamaClient(timeout=5.0)
         self._task = asyncio.create_task(self._loop(), name="telemetry_collector")
         logger.info("telemetry_collector_started", interval_s=settings.telemetry_scrape_interval_s)
 
@@ -176,7 +179,7 @@ class TelemetryCollector:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        for client in (self._nim_client, self._vllm_client, self._sglang_client, self._dynamo_client):
+        for client in (self._nim_client, self._vllm_client, self._sglang_client, self._dynamo_client, self._ollama_client):
             if client:
                 await client.close()
         logger.info("telemetry_collector_stopped")
@@ -195,10 +198,41 @@ class TelemetryCollector:
         Each adapter returns a TelemetryUpdate that may contain rich metrics
         (Prometheus histograms, cache hit rates, queue depths) or fall back to
         probe-timing estimates when native metrics are unavailable.
+
+        Warmup grace: during the first `warmup_grace_seconds` after an
+        endpoint is registered (e.g. via dormant-profile auto-activation),
+        probe failures do not mark the endpoint UNHEALTHY. This prevents a
+        container that is still booting from being locked out of routing
+        just because its /health is temporarily unreachable.
         """
         health = EndpointHealth.UNKNOWN
+
+        # Compute endpoint age up front — backend adapters don't raise on
+        # probe failure; they RETURN TelemetryUpdate(error_rate=1.0). So we
+        # check for "effectively-failed" probes after the fact and still
+        # apply warmup grace.
+        registered_at = ep.registered_at
+        if registered_at.tzinfo is None:
+            registered_at = registered_at.replace(tzinfo=timezone.utc)
+        age_s = (datetime.now(timezone.utc) - registered_at).total_seconds()
+        in_warmup = age_s < settings.endpoint_warmup_grace_s
+
         try:
             update = await self._probe_by_backend(ep)
+
+            # Treat error_rate >= 0.5 as a probe failure. During warmup,
+            # skip the upsert so the endpoint stays in its current (likely
+            # UNKNOWN) state and remains routable.
+            if in_warmup and (update.error_rate or 0.0) >= 0.5:
+                logger.info(
+                    "probe_failed_during_warmup",
+                    endpoint=ep.name,
+                    age_s=round(age_s, 1),
+                    grace_s=settings.endpoint_warmup_grace_s,
+                    error_rate=update.error_rate,
+                )
+                return
+
             await self._store.upsert(update)
 
             # Derive health from telemetry
@@ -211,6 +245,18 @@ class TelemetryCollector:
                 error_rate=update.error_rate,
             )
         except Exception as exc:
+            # Same warmup-grace logic for the exception path (connection
+            # refused, timeout, etc.).
+            if in_warmup:
+                logger.info(
+                    "scrape_during_warmup",
+                    endpoint=ep.name,
+                    age_s=round(age_s, 1),
+                    grace_s=settings.endpoint_warmup_grace_s,
+                    error=str(exc),
+                )
+                return
+
             health = EndpointHealth.UNHEALTHY
             logger.warning("scrape_failed", endpoint_id=ep.id, backend=ep.backend_type, error=str(exc))
             await self._store.upsert(
@@ -232,6 +278,10 @@ class TelemetryCollector:
         if ep.backend_type == BackendType.DYNAMO:
             assert self._dynamo_client is not None
             return await self._dynamo_client.probe(ep)
+
+        if ep.backend_type == BackendType.OLLAMA:
+            assert self._ollama_client is not None
+            return await self._ollama_client.probe(ep)
 
         # Default: NIM (also handles UNKNOWN backend_type gracefully)
         assert self._nim_client is not None

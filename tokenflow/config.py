@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     telemetry_scrape_interval_s: int = 10
     telemetry_stale_threshold_s: int = 60  # treat as stale after N seconds
     telemetry_smoothing_alpha: float = 0.3  # EMA alpha for smoothing metrics
+    # Warmup grace for freshly-registered endpoints (e.g. dormant-profile
+    # auto-activations). Probe failures within this window after
+    # `registered_at` do not mark the endpoint UNHEALTHY — covers the
+    # period while a newly-started container boots its serving process.
+    endpoint_warmup_grace_s: int = 120
 
     # Policy
     policy_file: str | None = None
