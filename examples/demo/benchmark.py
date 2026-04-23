@@ -512,18 +512,23 @@ async def main_async(args):
     if args.intent_noise or args.workload_noise:
         print(f"[noise] intent={args.intent_noise:.2f}  workload={args.workload_noise:.2f}")
 
-    # probe health
+    # probe health — router is required, other backends are advisory
+    # (they may be dormant / offline in the on-demand spin-up scenario)
     async with httpx.AsyncClient(timeout=5.0) as c:
-        probes = [("router", args.router), ("decode", args.decode), ("prefill", args.prefill)]
+        probes = [("router", args.router, True), ("decode", args.decode, False),
+                  ("prefill", args.prefill, False)]
         if args.spec:
-            probes.append(("spec", args.spec))
-        for label, url in probes:
+            probes.append(("spec", args.spec, False))
+        for label, url, required in probes:
             try:
                 r = await c.get(f"{url}/health")
                 print(f"[probe] {label} ({url}): HTTP {r.status_code}")
             except Exception as e:
-                print(f"[probe] {label} ({url}): FAIL — {e}", file=sys.stderr)
-                sys.exit(1)
+                msg = f"[probe] {label} ({url}): OFFLINE — {e}"
+                if required:
+                    print(msg, file=sys.stderr)
+                    sys.exit(1)
+                print(msg + "  (non-fatal, may be dormant)")
 
     sem = asyncio.Semaphore(args.concurrency)
 
