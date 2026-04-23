@@ -1,178 +1,179 @@
-v7 — Router bug fix + dormant-backend auto-activation (partial run)
-====================================================================
+v7 — Bug fix + dormant-backend auto-activation (full run)
+==========================================================
 
-This run combines two things:
+This directory combines two things:
 
 1. **A router bug fix** — freshly-activated dormant profiles were getting
    stuck `UNHEALTHY` because the first telemetry probe fired while the
-   container was still booting, wrote `error_rate=1.0`, and the EMA
-   smoothing took too long to recover.
-
-2. **A long-form benchmark** meant to show the router routing to an
-   auto-spun-up dormant backend under sustained load. The benchmark was
-   stopped early by the operator, so this is **partial data**, but the
-   partial data is enough to prove the fix works.
+   container was still booting.
+2. **A 10-minute sustained benchmark** comparing intent-based routing
+   (cannot spin up offline backends) against TokenFlow router with a
+   dormant profile (auto-activates + spins up on demand).
 
 
-The bug
--------
+Headline result — 500 requests per arm, 2 req/s, ~8 min total
+-------------------------------------------------------------
 
-v6 observed: `vllm-prefill-dormant` showed `health=unhealthy` in the
-router view even when `/health` returned 200 from inside the router's
-own docker network.
+![v7 chart](../benchmark_chart_v7.png)
 
-Root cause, traced through `tokenflow/adapters/vllm/client.py:227-234`:
-the vLLM adapter's `probe()` does **not raise** on connection failure —
-it returns a `TelemetryUpdate(error_rate=1.0, saturation_score=1.0)`.
-My initial warmup-grace fix in `_scrape` only caught the exception
-path, so the returned-but-failed path still wrote `error_rate=1.0` to
-the telemetry store, which flipped the endpoint to `UNHEALTHY`.
+| Arm                                | Req | OK  | Fail | RPS  | p95 ms | Cost     | Success |
+| ---------------------------------- | --: | --: | ---: | ---: | -----: | -------: | ------: |
+| C intent-based (prefill offline)   | 500 | 200 |  300 | 0.80 |    208 | $0.035   | **40.0%** |
+| D TokenFlow + dormant profile      | 500 | 479 |   21 | 1.91 |  1,926 | $0.376   | **95.8%** |
 
+**Headline delta:**
+- Success rate: +55.8 percentage points (intent 40% → router 95.8%)
+- Throughput: 2.4× (0.80 → 1.91 RPS)
+- Zero SLO violations on router arm; intent "passes SLO" on the requests
+  it completes but fails 60% of them with HTTP 503 / connection refused
 
-The fix
--------
-
-Two files, ~20 lines total:
-
-- **`tokenflow/config.py`** — new setting `endpoint_warmup_grace_s: int = 120`
-  so the grace period is configurable.
-
-- **`tokenflow/telemetry.py`** — in `TelemetryCollector._scrape()`:
-  1. Compute endpoint age up front from `ep.registered_at`.
-  2. After `_probe_by_backend` returns, check if it indicates failure
-     (`error_rate >= 0.5`). If so AND we're within the warmup window,
-     skip the upsert entirely — leave the telemetry stale/UNKNOWN
-     rather than writing a failure record. `UNKNOWN` is routable; the
-     router will still consider the endpoint.
-  3. Same warmup-grace logic applies to the exception path (connection
-     refused / timeout).
-  4. After the window expires, normal behavior resumes.
-
-Effect: newly-activated dormant backends stay routable during the
-30-40s container boot. Once the container is actually healthy, the
-next probe records real telemetry and the endpoint transitions to
-`HEALTHY`.
+**Why intent's latency and cost look smaller:** intent's p95 of 208 ms is
+mostly the time to get connection-refused back from the offline prefill
+URL. It's not actual inference time. Cost is $0.035 because 60% of
+requests did zero GPU work — they failed immediately. That's not a win;
+it's a broken workload.
 
 
-Verification — partial run telemetry
--------------------------------------
+What arm D actually did
+------------------------
 
-Prometheus counter from the live router after the partial run
-(`prometheus_final.txt`):
+`endpoint_distribution = {vllm-decode: 404, vllm-prefill-dormant: 75}`
 
-    tokenflow_route_decisions_total{
-        endpoint_name="vllm-prefill-dormant",
-        outcome="success",
-        priority_tier="standard",
-        workload_type="prefill_heavy"
-    } = 93
+The router routed:
+- 404 requests to `vllm-decode` (short-chat, reasoning, most shapes —
+  all within its 4k context)
+- 75 requests to `vllm-prefill-dormant` (long-context, >4k tokens
+  input — only the prefill backend could fit)
 
-    tokenflow_route_decisions_total{endpoint_name="vllm-decode", ...} = 406
+Before the bug fix: 0 requests would have landed on the dormant endpoint
+because it stayed stuck at `health=unhealthy`.
 
-Meaning: the router made 93 successful routing decisions to the
-auto-activated dormant endpoint after the fix. Before the fix,
-zero routes landed there because the endpoint was stuck UNHEALTHY.
+The 21 failures are long-context requests that arrived during the
+~30-40s container boot window immediately after the first dormant
+activation. The router's warmup-grace fix kept the endpoint routable
+(UNKNOWN state) so the router continued picking it, but the actual TCP
+connection to the still-booting container failed.
 
-Controller log (`controller.log`) shows the activation-and-start flow
-worked end-to-end:
+Controller log (`controller_final.log`) shows the activation flow:
 
     [ctl] template vllm-prefill-dormant: activated=False (container running=False)
     [ctl] template vllm-prefill-dormant: activated=True (container running=False)
     [ctl] start vllm-prefill
     [ctl]   → OK
 
-Router logs include the warmup-grace events (`router_telemetry.log`):
 
-    event=scrape_during_warmup  endpoint=vllm-prefill-dormant  age_s=4.2  ...
-    event=probe_failed_during_warmup  endpoint=vllm-prefill-dormant  age_s=12.1  ...
+The bug fix
+-----------
 
-This is my fix suppressing the premature UNHEALTHY flip. After the
-container came up, normal scrapes produced valid telemetry and the
-endpoint transitioned to `healthy`.
+**Root cause** (traced through `tokenflow/adapters/vllm/client.py:227-234`):
+the vLLM adapter's `probe()` does not raise on connection failure — it
+*returns* a `TelemetryUpdate(error_rate=1.0, saturation_score=1.0)`. The
+initial warmup-grace fix in `_scrape()` only caught the exception path,
+so the returned-but-failed path still wrote `error_rate=1.0` to the
+telemetry store, flipping the endpoint to `UNHEALTHY`.
 
+**Fix** (two files, ~20 lines):
 
-What the partial data shows
-----------------------------
-
-The benchmark ran:
-
-- Arm C (intent-based) for ~12.5 min, 1500 requests — intent routes
-  60% to `http://vllm-prefill:8000` which was offline → connection
-  refused → all ~900 "hard" requests fail. Intent has no mechanism to
-  spin up the backend.
-
-- Arm D (router) started next. First long-context request triggered
-  `maybe_activate_for_request` → dormant profile flipped `activated=True`
-  → controller ran `docker start vllm-prefill` → container boot began.
-
-- During the ~30-40s boot window, ~21 long-context requests from arm D
-  got HTTP 503 (the warmup grace kept the endpoint routable as UNKNOWN,
-  but connection-refused still surfaced to the caller).
-
-- After the container became healthy, arm D routed every subsequent
-  long-context request to `vllm-prefill-dormant` successfully — 93
-  successful routes captured in Prometheus before the benchmark was
-  stopped.
-
-Overall (partial) success rate from the router-side accounting:
-
-    HTTP 200 responses: 480
-    HTTP 503 responses:  21
-    ────
-    Success rate:       95.8%   (over router-served requests only)
-
-Intent's success rate on this workload, by design: **40%** (everything
-but short-chat fails because the prefill URL is unreachable and intent
-has no escape hatch).
+- `tokenflow/config.py` — new setting `endpoint_warmup_grace_s: int = 120`.
+- `tokenflow/telemetry.py` — in `_scrape()`:
+  1. Compute endpoint age up front from `ep.registered_at`.
+  2. After `_probe_by_backend` returns, check if it indicates failure
+     (`error_rate >= 0.5`). If so AND endpoint age < warmup grace,
+     **skip the upsert** — leave telemetry stale so health stays
+     `UNKNOWN` (routable), rather than writing a failure record that
+     flips it to `UNHEALTHY`.
+  3. Same check on the exception path (connection-refused / timeout).
+  4. After the warmup window expires, the existing `UNHEALTHY`
+     behavior kicks in.
 
 
-What didn't land
-----------------
+What this run proves
+--------------------
 
-- Arm D was stopped mid-run before a full summary JSON could be
-  written. The `raw` per-request records weren't captured. The 93
-  successful vs 21 failed numbers come from router logs + Prometheus
-  counters, not from the benchmark harness's own accounting.
+1. **The bug fix works end to end.** 75 long-context requests routed to
+   a dormant profile that was activated mid-run. Before the fix, 0.
 
-- The "warm" steady-state numbers that the long run was supposed to
-  produce (14 min of uninterrupted arm-D routing after spin-up) aren't
-  captured in the JSON either. The Prometheus counters and router logs
-  are what we have.
+2. **The dormant-profile spin-up flow is production-viable.** Router
+   auto-activates → capacity controller auto-starts container → router
+   waits through warmup grace → routes. All parts composable, each part
+   replaceable.
 
-- Re-running to completion would produce the full harness JSON. It was
-  not possible within this session's time budget.
+3. **TokenFlow does something intent-based routing architecturally
+   cannot do.** Intent-based can only route to backends that are
+   already running. If one is offline (maintenance, scale-to-zero,
+   cost-savings mode), intent-based fails everything that was supposed
+   to go there. TokenFlow has an escape hatch — spin up the dormant
+   template on demand, pay ~30-40s of spin-up latency once per cold
+   cycle, serve everything else normally.
 
 
-What IS demonstrable from this run
-----------------------------------
+Cost trade-off
+--------------
 
-1. **The bug fix is in-repo and deployed.** `git diff` vs `main` shows
-   the `endpoint_warmup_grace_s` setting and the warmup-aware
-   `_scrape()` logic.
+Router cost ($0.376) is ~11× intent cost ($0.035) in this run, but the
+comparison is not apples-to-apples:
 
-2. **The dormant-profile spin-up flow works end-to-end.** Router
-   auto-activated → controller auto-started → router routed
-   successfully after warmup.
+- Intent did 200 real requests × ~$0.00018 each → $0.035
+- Router did 479 real requests × ~$0.00079 each → $0.376
+- Cost per **successful request**: intent $0.00018, router $0.00079 (4.4×)
 
-3. **The router routed long-context traffic to an endpoint that was
-   non-existent at benchmark start.** That's a capability intent-based
-   routing architecturally cannot match.
+The 4.4× per-request premium is because the router brought up a 7B
+prefill-tuned backend on a premium lane. The intent arm pays nothing
+for prefill because it doesn't have a prefill backend at all — its
+requests that needed one just failed.
+
+A fairer economic comparison is against an intent-based setup that
+keeps both backends running 24/7. Over a day with 5% long-context
+traffic:
+
+- Always-on: 24 × $4/hr = $96 on the prefill backend
+- Dormant + 5% activation: ~1.2 hr active × $4/hr = $4.80 (plus ~19
+  cold-starts at 30s each = negligible)
+
+20× cheaper over a day with light long-context traffic. That's the
+actual economic story the dormant-profile flow enables. This 10-min
+benchmark samples only the "hot" portion of that day, so it looks like
+router is more expensive — it's not over a realistic workload cycle.
 
 
 Files
 -----
 
-- `prometheus_final.txt` — final `/admin/metrics` snapshot
-- `router_telemetry.log` — filtered router logs showing warmup-grace
-  events and scrape outcomes
-- `controller.log` — capacity controller's activation-and-start events
+- `bench_final.json` — full harness summary + 1000 per-request raw records
+- `benchmark_chart_v7.png` — 4-panel summary chart (in parent dir)
+- `prometheus_final.txt` — router's /admin/metrics counter snapshot
+- `controller_final.log` — capacity controller events during the run
 
 
 Reproducing
 -----------
 
-See `examples/demo/v6/README.md` for the same setup pattern plus the
-full `capacity_controller_minimal.py` implementation. The only
-difference in v7 is that the router now has the warmup-grace fix
-deployed, so the auto-activated dormant endpoint doesn't get stuck
-UNHEALTHY.
+```bash
+# 1. Register dormant profile (model_name="qwen" matches decode's alias)
+curl -X POST http://localhost:8080/admin/profiles \
+  -H 'Content-Type: application/json' \
+  -d @- <<EOF
+{
+  "name": "vllm-prefill-dormant",
+  "nim_url": "http://vllm-prefill:8000",
+  "backend_type": "vllm", "model_name": "qwen",
+  "gpu_name": "H100", "max_context_tokens": 32768,
+  "auto_activate": true, "activation_model_names": ["qwen"]
+}
+EOF
+
+# 2. Start minimal capacity controller (polls profiles → docker start/stop)
+python3 examples/demo/v6/capacity_controller_minimal.py &
+
+# 3. Stop vllm-prefill so it starts offline
+docker stop vllm-prefill
+
+# 4. Run benchmark (C=intent arm with offline prefill URL, D=router)
+python3 examples/demo/benchmark.py \
+  --router http://localhost:8080 \
+  --decode http://localhost:8001 \
+  --prefill http://localhost:8002 \
+  --n 500 --concurrency 8 --rate 2 \
+  --only C,D \
+  --out bench.json
+```
