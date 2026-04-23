@@ -145,12 +145,24 @@ def pick_shape() -> dict[str, Any]:
     return WORKLOAD_MIX[-1]
 
 
-def build_workload(n: int, seed: int) -> list[dict[str, Any]]:
+def build_workload(n: int, seed: int, workload_noise: float = 0.0) -> list[dict[str, Any]]:
+    """Build a seeded workload stream. `workload_noise` in [0,1] specifies
+    the fraction of requests whose `max_tokens` is randomised to a value
+    inconsistent with the actual output length — this is how we simulate
+    clients sending misleading `max_tokens` ceilings in production, which
+    breaks TokenFlow's `predicted_output_tokens` → `workload_type` inference.
+    The noise does NOT affect the prompt text, so intent-based classification
+    is unaffected by workload noise (and vice versa)."""
     random.seed(seed)
+    noise_rng = random.Random(seed + 1)
     out = []
     for i in range(n):
         shape = pick_shape()
         body = shape["gen"]()
+        if noise_rng.random() < workload_noise:
+            # Replace max_tokens with a random value from across all shapes.
+            # This makes TokenFlow's workload_type classifier misfire ~workload_noise fraction.
+            body["max_tokens"] = noise_rng.choice([16, 64, 128, 300, 500, 1024, 1500])
         out.append({
             "idx": i,
             "shape": shape["shape"],
@@ -158,6 +170,19 @@ def build_workload(n: int, seed: int) -> list[dict[str, Any]]:
             "body": body,
         })
     return out
+
+
+# Intent noise — randomly replaces classifier output to simulate real ML
+# classifier mis-classification (distilBERT/LLM-as-judge in prod typically
+# has 5-15% error rate).
+_INTENT_NOISE = {"fraction": 0.0, "rng": random.Random(42)}
+
+def _maybe_noisy_intent(intent: str) -> str:
+    if _INTENT_NOISE["rng"].random() < _INTENT_NOISE["fraction"]:
+        return _INTENT_NOISE["rng"].choice(
+            ["reasoning", "summarization", "generation", "chat"]
+        )
+    return intent
 
 
 # ------- cost model -------
@@ -290,7 +315,9 @@ SHAPE_HEADERS = {
 # enough.
 def classify_intent(messages: list[dict[str, str]]) -> str:
     """Naive keyword classifier → one of reasoning / summarization /
-    generation / chat. Fast (<0.1 ms) and deterministic."""
+    generation / chat. Fast (<0.1 ms) and deterministic. Applies
+    `_INTENT_NOISE["fraction"]` random mis-classification to simulate
+    realistic ML classifier error rates in production."""
     text = " ".join(m.get("content", "") for m in messages if m.get("role") in ("user", "system")).lower()
 
     if any(p in text for p in (
@@ -298,21 +325,21 @@ def classify_intent(messages: list[dict[str, str]]) -> str:
         "probability", "show the derivation", "calculation", "analyse the",
         "analyze the",
     )):
-        return "reasoning"
+        return _maybe_noisy_intent("reasoning")
 
     if any(p in text for p in (
         "summarise", "summarize", "summary", "tl;dr", "extract", "bullet",
         "in 3 bullets", "in 2 sentences",
     )):
-        return "summarization"
+        return _maybe_noisy_intent("summarization")
 
     if any(p in text for p in (
         "write a ", "essay", "short story", "400 words", "800 words",
         "2000-word", "detailed", "400-word",
     )):
-        return "generation"
+        return _maybe_noisy_intent("generation")
 
-    return "chat"
+    return _maybe_noisy_intent("chat")
 
 
 # Intent → backend. Heavy intents go to the big model; chat stays small.
@@ -478,7 +505,12 @@ def print_table(rows: list[dict[str, Any]]) -> None:
 
 # ------- main -------
 async def main_async(args):
-    workload = build_workload(args.n, args.seed)
+    # Configure noise sources before generating workload
+    _INTENT_NOISE["fraction"] = args.intent_noise
+    _INTENT_NOISE["rng"] = random.Random(args.seed + 2)
+    workload = build_workload(args.n, args.seed, workload_noise=args.workload_noise)
+    if args.intent_noise or args.workload_noise:
+        print(f"[noise] intent={args.intent_noise:.2f}  workload={args.workload_noise:.2f}")
 
     # probe health
     async with httpx.AsyncClient(timeout=5.0) as c:
@@ -562,6 +594,12 @@ def main():
     ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="benchmark_results.json")
+    ap.add_argument("--intent-noise", type=float, default=0.0,
+                    help="fraction [0,1] of intent classifications that are randomised; "
+                         "simulates real ML classifier mis-classification rate")
+    ap.add_argument("--workload-noise", type=float, default=0.0,
+                    help="fraction [0,1] of requests sent with a misleading max_tokens, "
+                         "which confuses TokenFlow's workload_type inference")
     args = ap.parse_args()
     asyncio.run(main_async(args))
 
