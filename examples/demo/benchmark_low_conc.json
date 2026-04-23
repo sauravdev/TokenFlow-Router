@@ -1,0 +1,63 @@
+{
+  "workload_size": 150,
+  "seed": 42,
+  "concurrency": 8,
+  "summary": [
+    {
+      "arm": "A direct",
+      "requests": 150,
+      "success": 150,
+      "failed": 0,
+      "throughput_rps": 11.14,
+      "p50_ms": 287.2,
+      "p95_ms": 2164.7,
+      "p99_ms": 2225.8,
+      "mean_ms": 649.7,
+      "slo_miss": 0,
+      "slo_miss_rate_pct": 0.0,
+      "total_cost_usd": 0.067672,
+      "cost_per_1k_tok_usd": 0.003092,
+      "endpoint_distribution": {
+        "vllm-fast": 150
+      }
+    },
+    {
+      "arm": "B round-robin",
+      "requests": 150,
+      "success": 150,
+      "failed": 0,
+      "throughput_rps": 9.38,
+      "p50_ms": 302.0,
+      "p95_ms": 3235.7,
+      "p99_ms": 3264.3,
+      "mean_ms": 788.4,
+      "slo_miss": 0,
+      "slo_miss_rate_pct": 0.0,
+      "total_cost_usd": 0.186764,
+      "cost_per_1k_tok_usd": 0.008521,
+      "endpoint_distribution": {
+        "vllm-fast": 75,
+        "vllm-quality": 75
+      }
+    },
+    {
+      "arm": "C router",
+      "requests": 150,
+      "success": 150,
+      "failed": 0,
+      "throughput_rps": 9.42,
+      "p50_ms": 322.0,
+      "p95_ms": 2371.4,
+      "p99_ms": 2579.8,
+      "mean_ms": 778.0,
+      "slo_miss": 0,
+      "slo_miss_rate_pct": 0.0,
+      "total_cost_usd": 0.149333,
+      "cost_per_1k_tok_usd": 0.006841,
+      "endpoint_distribution": {
+        "vllm-quality": 23,
+        "vllm-fast": 127
+      }
+    }
+  ]
+}

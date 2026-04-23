@@ -294,6 +294,38 @@ tokenflow serve --policy-file examples/configs/policy.yaml
 uvicorn tokenflow.main:app --host 0.0.0.0 --port 8080
 ```
 
+### Live demo with two real vLLM backends (`examples/demo/`)
+
+For an end-to-end walkthrough against *real* model servers — not mock
+endpoints — see `examples/demo/`. The directory contains:
+
+- **`deploy_backends.sh`** — registers a `vllm-fast` (Qwen2.5-3B, economy)
+  and a `vllm-quality` (Qwen2.5-7B, premium) endpoint with the router.
+- **`01_short_chat.sh` … `06_policy_swap.sh`** — six scenario scripts that
+  each exercise a different DSL rule in the `production-balanced` policy
+  (short chat → fast lane, reasoning → quality lane, tenant override,
+  decision explain, live preset swap, etc.). Each script prints the full
+  decision trace from `/admin/routes/explain/{request_id}`.
+- **`benchmark.py`** — a three-arm harness (`direct` / `round-robin` /
+  `router`) that replays the same seeded workload through each strategy
+  and reports p50/p95/p99 latency, throughput, SLO-miss rate, and cost.
+- **`RESULTS.md`** — writeup from an 8×H100 run. Highlights at
+  concurrency 32: the router delivers **+127% throughput**, **-73% p95
+  latency**, and **-73% cost** vs round-robin across two heterogeneous
+  backends, with a per-request routing overhead of **0.13–0.17 ms**.
+
+Minimal reproduction once you have two vLLM containers running (one on
+port 8001, one on 8002) and the router on 8080:
+
+```bash
+bash examples/demo/deploy_backends.sh
+python3 examples/demo/benchmark.py \
+  --router http://localhost:8080 \
+  --fast   http://localhost:8001 \
+  --quality http://localhost:8002 \
+  --n 200 --concurrency 32
+```
+
 ---
 
 ## CLI
