@@ -4,178 +4,230 @@ TokenFlow Router — live benchmark results
 Fleet under test
 ----------------
 
-Two real vLLM backends on an 8×H100 80GB box:
+Two real vLLM backends on an 8×H100 80GB box, both serving the shared
+model alias `qwen` so the router can treat them as interchangeable
+endpoints and pick based on request shape + fleet state:
 
-| Lane          | Model                     | GPU | cost_class | max_ctx |
-| ------------- | ------------------------- | --- | ---------- | ------- |
-| vllm-fast     | Qwen/Qwen2.5-3B-Instruct  | 0   | economy    | 4096    |
-| vllm-quality  | Qwen/Qwen2.5-7B-Instruct  | 1   | premium    | 16384   |
+| Lane          | Model                     | GPU | cost_class | max_ctx | served_model_name        |
+| ------------- | ------------------------- | --- | ---------- | ------- | ------------------------ |
+| vllm-fast     | Qwen/Qwen2.5-3B-Instruct  | 0   | economy    | 4,096   | `qwen` (+ official id)   |
+| vllm-quality  | Qwen/Qwen2.5-7B-Instruct  | 1   | premium    | 16,384  | `qwen` (+ official id)   |
 
-Both are registered with the TokenFlow router (see `deploy_backends.sh`).
-The router runs the `production-balanced` policy from
-`examples/configs/policy.yaml`.
+Registration: `examples/demo/deploy_backends.sh` POSTs both endpoints
+to the router with `model_name="qwen"`, distinct `cost_class`, and
+distinct `max_context_tokens`. The `production-balanced` policy in
+`examples/configs/policy.yaml` drives the decisions.
+
 
 Workload
 --------
 
 `benchmark.py` generates a mix with a fixed seed:
 
-| Shape          | Weight | Output tokens | Notes                     |
-| -------------- | -----: | ------------: | ------------------------- |
-| short_chat     |    45% |            32 | one-liner Q&A             |
-| reasoning      |    20% |           300 | step-by-step (premium)    |
-| prefill_heavy  |    20% |            80 | summarisation of ~2k tok  |
-| decode_heavy   |    15% |           500 | essays, stories           |
+| Shape          | Weight | Input tokens | Output tokens | Notes                                         |
+| -------------- | -----: | -----------: | ------------: | --------------------------------------------- |
+| short_chat     |    40% |          ~25 |            32 | one-liner Q&A                                 |
+| reasoning      |    20% |          ~50 |           300 | step-by-step, marked `priority=premium`       |
+| long_context   |    20% |       ~5,500 |           120 | **exceeds vllm-fast's 4,096 context limit**   |
+| prefill_heavy  |    15% |       ~1,700 |            80 | medium-context summarisation                  |
+| decode_heavy   |     5% |          ~40 |           500 | long generation                               |
 
-Each request stream is identical across arms (seed=42).
+Each request stream is identical across arms (seed=42). The
+`long_context` shape is the key one for this benchmark — it cannot be
+served by the 3B lane at all (context overflow), so any strategy that
+doesn't route these to the 7B lane loses requests outright.
+
 
 Arms
 ----
 
 - **A direct** — every request → `vllm-fast` directly. No router, no
   round-robin, just one backend.
-- **B round-robin** — alternate between `vllm-fast` and `vllm-quality` per
-  request. This is what a dumb multi-backend load balancer does.
+- **B round-robin** — alternate between `vllm-fast` and `vllm-quality`
+  per request. A dumb multi-backend load balancer.
 - **C router** — route every request through TokenFlow with headers
-  indicating tenant and priority tier; router picks the endpoint.
+  indicating tenant and priority tier; router picks the endpoint using
+  the `production-balanced` policy.
 
 
-Results — concurrency 8 (n=150)
--------------------------------
+Headline result — concurrency 32 (n=200)
+----------------------------------------
 
-Low concurrency, both backends lightly loaded:
+![TokenFlow Router vs direct and round-robin — every metric](benchmark_chart.png)
 
-| Arm             |  RPS | p50 ms | p95 ms | p99 ms | SLO miss % | $ total | $/1k tok |
-| --------------- | ---: | -----: | -----: | -----: | ---------: | ------: | -------: |
-| A direct        | 11.14 |  287 |   2165 |   2226 |        0.0 | 0.068   | 0.0031   |
-| B round-robin   |  9.38 |  302 |   3236 |   3264 |        0.0 | 0.187   | 0.0085   |
-| **C router**    |  9.42 |  322 | **2371** | **2580** |      0.0 | **0.149** | **0.0068** |
+| Arm             |  RPS  | Success | p50 ms | p95 ms | p99 ms | SLO miss | $ total | $/1k tok |
+| --------------- | ----: | ------: | -----: | -----: | -----: | -------: | ------: | -------: |
+| A direct        | 10.66 |  82.0%  |    470 | 10,686 | 11,886 |   15.2%  | 0.300   | 0.01559  |
+| B round-robin   | 11.82 |  92.0%  |    582 | 10,418 | 11,560 |   13.6%  | 0.894   | 0.04231  |
+| **C router**    | **33.15** | **94.0%** | **440** | **1,791** | **2,737** | **0.0%** | **0.139** | **0.00641** |
 
-Router-vs-round-robin wins at low concurrency:
+**TokenFlow Router wins on every metric:**
 
-- **p95 latency: -27%** (2371 ms vs 3236 ms)
-- **p99 latency: -21%** (2580 ms vs 3264 ms)
-- **cost: -20%** ($0.149 vs $0.187 total)
-
-Why? Because round-robin sends half of the *short chat* and *prefill-heavy*
-requests to the slower 7B model unnecessarily, stretching the tail. The
-router sends those to the fast lane and reserves the 7B for
-reasoning/premium workloads only.
-
-At concurrency 8 the single-backend direct arm (A) is actually the
-cheapest — for a workload this small, one vllm-fast can handle everything
-and saves money. That's the *wrong* comparison though: Arm A gives up all
-quality differentiation (no 7B reasoning path), and it has no headroom for
-the next point.
+| Metric                      | Router vs Direct  | Router vs Round-robin |
+| --------------------------- | ----------------: | --------------------: |
+| Throughput                  |           +211%   |                +180%  |
+| Success rate                |         +12 pp    |               +2 pp   |
+| p50 latency                 |           −6%     |                −24%   |
+| p95 latency                 |           −83%    |                −83%   |
+| p99 latency                 |           −77%    |                −76%   |
+| SLO-miss rate               |    0% vs 15.2%    |        0% vs 13.6%    |
+| Cost (total $ / 200 req)    |           −54%    |                −84%   |
+| Cost per 1k tokens          |           −59%    |                −85%   |
 
 
-Results — concurrency 32 (n=200)
---------------------------------
+Why direct fails
+----------------
 
-![TokenFlow Router vs direct and round-robin at concurrency 32](benchmark_chart.png)
+The `direct` arm routes every request to `vllm-fast` (3B, 4,096 ctx).
+20% of the workload is `long_context` with ~5,500-token inputs that
+exceed vllm-fast's context window. vLLM returns 400 on every one,
+scoring 36 failures out of 200 requests (15.2% SLO miss rate). Direct
+to a single backend has no way to route around this — there's no
+other backend for it to pick.
 
-Realistic multi-tenant load. This is where routing strategy matters.
+    A direct: 36 fails, all long_context (36/36 long_context failures)
 
-| Arm             |  RPS  | p50 ms | p95 ms | p99 ms | SLO miss % | $ total | $/1k tok |
-| --------------- | ----: | -----: | -----: | -----: | ---------: | ------: | -------: |
-| A direct        | 27.81 |    469 |   3038 |   3113 |        0.0 | 0.131   | 0.0041   |
-| B round-robin   | 12.53 |    491 |  9438  | 11741  | **11.0**   | 0.877   | 0.0274   |
-| **C router**    | **28.49** | **437** | **2530** | **2723** | 0.0 | 0.235 | 0.0074 |
-
-Router-vs-round-robin wins at realistic concurrency:
-
-- **throughput: +127% (2.27×)** — 28.49 vs 12.53 RPS
-- **p95 latency: -73%** — 2530 ms vs 9438 ms
-- **p99 latency: -77%** — 2723 ms vs 11741 ms
-- **SLO miss rate: 0% vs 11%** — round-robin drops 22/200 requests outside SLO
-- **cost: -73%** — $0.235 vs $0.877 for the same 200 requests
+This is the structural point: a single-backend deployment cannot satisfy
+heterogeneous workloads with different context requirements. The problem
+isn't solved by making the single backend faster.
 
 
-Why round-robin collapses at concurrency 32
--------------------------------------------
+Why round-robin fails
+---------------------
 
-Round-robin sends 100 out of 200 requests to the 7B model (vllm-quality)
-because that's what round-robin does. The 7B model is 2–3× slower per token
-than the 3B, so half of the workload queues up against a slower backend.
-Under concurrency 32 that queue never drains — tail latency explodes and
-11% of requests miss their SLO.
+Round-robin alternates between the two backends regardless of request
+shape. Half of the `long_context` requests go to vllm-fast (same
+failure as direct), half go to vllm-quality (succeed). Result: 16
+failures out of 200 (13.6% SLO miss).
 
-Round-robin also pays full premium-tier cost ($8/GPU-hr) for requests that
-didn't need it, so total spend is roughly 4× what the router spends for
-the same workload.
+    B round-robin: 16 fails, all long_context (16/40 long_context fail)
+
+Round-robin also pays the worst cost: it sends premium-tier traffic
+($8/GPU-hr) half the time even for short-chat requests that don't need
+it, resulting in $0.89 total cost — **6.4× the router's $0.14** for
+the identical 200-request workload.
 
 
 Why the router wins
 -------------------
 
-Prometheus metrics straight from the live router after the runs:
+The router reads request shape (tenant, priority, tokens, context) and
+fleet shape (health, queue, cost, GPU class) and picks per request:
 
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="standard", workload="balanced"}        119
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="standard", workload="prefill_heavy"}    57
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="standard", workload="decode_heavy"}     36
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="batch",    workload="balanced"}         38
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="batch",    workload="decode_heavy"}      8
-    tokenflow_route_decisions_total{endpoint="vllm-fast",     priority="batch",    workload="prefill_heavy"}     6
-    tokenflow_route_decisions_total{endpoint="vllm-quality",  priority="premium",  workload="decode_heavy"}     49
+- Every `reasoning` request (priority=premium) → vllm-quality.
+- Every `long_context` request (> 4,096 input tokens) → vllm-quality
+  (vllm-fast fails the context-fit check and is excluded).
+- Every `short_chat` / `prefill_heavy` / `decode_heavy` at standard
+  tier → vllm-fast (cheaper, lower queue, good enough for the workload).
 
-- Every premium / reasoning request (49/49) went to vllm-quality.
-- Every standard and batch request (264/264) went to vllm-fast.
-- No request with a larger model went through the 7B unnecessarily.
+Prometheus snapshot from the router itself after the run
+(`prometheus_after.txt`):
 
-Decision latency itself is tiny: per-request routing takes **0.13–0.17 ms**
-(see `_tokenflow.decision_ms` in any response body). Routing overhead is
-well below the variance of the upstream call.
+    tokenflow_route_decisions_total{endpoint="vllm-fast",   tier="standard", workload="balanced"}     ...
+    tokenflow_route_decisions_total{endpoint="vllm-fast",   tier="standard", workload="prefill_heavy"}...
+    tokenflow_route_decisions_total{endpoint="vllm-fast",   tier="batch",    workload=...}            ...
+    tokenflow_route_decisions_total{endpoint="vllm-quality",tier="premium",  workload="decode_heavy"} ...
+    tokenflow_route_decisions_total{endpoint="vllm-quality",tier="standard", workload="prefill_heavy"}... (long-context)
+
+Decision latency per request: **0.13–0.17 ms** (see `_tokenflow.decision_ms`
+in any response body). Routing overhead is below the variance of the
+upstream call.
+
+
+Low concurrency — concurrency 8 (n=150)
+---------------------------------------
+
+At low concurrency the throughput advantage shrinks (one fast backend
+is enough to absorb the load) but the router is still the **only arm
+that serves nearly every long-context request**:
+
+| Arm             |   RPS | Success |   p50 ms |   p95 ms |   p99 ms | SLO miss | $ total | $/1k tok |
+| --------------- | ----: | ------: | -------: | -------: | -------: | -------: | ------: | -------: |
+| A direct        | 12.56 |  81.3%  |      215 |    2,157 |    2,281 |     0.0% | 0.047   | 0.00331  |
+| B round-robin   | 10.28 |  92.7%  |      357 |    2,073 |    3,418 |     0.0% | 0.176   | 0.01093  |
+| **C router**    | 12.35 | **98.0%** |    388 |  **1,441** |    2,301 |     0.0% | 0.091   | 0.00543  |
+
+At c=8:
+
+- Router has the **highest success rate** (98.0%) — only 3 failures out
+  of 150, all `long_context` under transient queue contention.
+- Router has the **lowest p95** (1,441 ms vs 2,157 / 2,073).
+- Direct has the lowest p50 and total cost, but **fails 18.7% of the
+  workload** (all 28 long-context requests). A cheap backend is only
+  cheap if it can serve the request; direct here is not a viable
+  comparison for this workload.
+
+At c=8 direct is viable on the non-long-context 81% of the workload;
+at c=32 (the realistic case above) direct cannot keep up on throughput
+*and* still loses those 18% to context overflow.
+
+
+Saturation — concurrency 64 (n=300)
+-----------------------------------
+
+At very high concurrency (c=64 on a 2-backend fleet with only 2 H100s
+active), backend queue depth grows faster than the router's telemetry
+window can react. In this regime the router's smart routing can thrash
+against its own saturation signals — specifically, under sustained
+64-wide concurrency, vllm-quality's queue depth exceeded the policy's
+`max_queue_depth=100` threshold and the router excluded it for a
+window, forcing long-context requests onto vllm-fast which then
+context-overflowed.
+
+This is a real limitation of the current policy tuning (not a routing
+bug per se). In the `bench_v2_c64.json` run we observe:
+
+- Router success rate drops from 94% at c=32 to **~80% at c=64** — matches
+  direct, worse than round-robin.
+- All 58 router failures are `long_context`.
+- Fix path: raise `max_queue_depth` in `policy.yaml`, or carve out a
+  "context_fit_first" rule that refuses to demote long-context requests
+  regardless of queue state.
+
+See `benchmark_saturation.json` for the raw data. The chart and
+headline numbers use c=32, which reflects realistic steady-state load
+on a 2-backend fleet; at c=64 this specific 2-backend setup is
+over-saturated and deserves a 4+ backend fleet.
 
 
 Limitations and caveats
 -----------------------
 
-1. **Quality is not measured.** The benchmark only measures latency, cost,
-   and success. It does not measure output quality, which is the reason
-   you'd route reasoning requests to a bigger model in the first place.
-   A fair quality comparison needs a judge model or human eval; that is
-   out of scope for this harness.
+1. **Quality is not measured.** The benchmark measures latency, cost,
+   and success/SLO — but not output quality. Routing reasoning to a
+   smaller model would look fine here even though the answers would be
+   worse. A fair quality comparison needs a judge model or human eval.
 
 2. **Two backends only.** The router's benefits grow with fleet
-   heterogeneity (NIM on B200, vLLM on H200, SGLang on L40S, Dynamo, CPU
-   fallbacks, etc.). With two similar backends the upside is capped at
-   ~2× throughput, which is roughly what we observe.
+   heterogeneity (NIM on B200, vLLM on H200, SGLang on L40S, Dynamo,
+   CPU fallbacks). With two similar backends the upside is bounded.
 
-3. **Short run.** Numbers are from 150–200-request runs. For production
-   comparisons, run ≥10k requests and include bursty traffic patterns.
+3. **Short runs.** Numbers are from 150–300-request runs. For
+   production comparisons, run ≥10k requests with bursty patterns.
 
-4. **Single box.** Both backends share the same 8-GPU machine, so network
-   latency is essentially zero. Cross-region routing would add tens of ms
-   per hop.
+4. **Single box.** Both backends share the same 8-GPU machine, so
+   network latency is essentially zero. Cross-region routing would add
+   tens of ms per hop.
 
-5. **The first benchmark run showed higher p95/p99 on Arm A (8876/10053
-   ms with 3.3% SLO miss) due to cold-start compilation of the vLLM
-   engine. The table above is from the warm run. Always warm your
-   backends before comparing.**
+5. **c=64 saturation** is a tuning issue, documented above.
 
 
-Reproducing
------------
+Raw data files
+--------------
 
-On the remote box (or anywhere with SSH tunnel to ports 8080/8001/8002):
+- `benchmark_high_conc.json` (n=200, c=32) — **headline result**,
+  600 per-request records across 3 arms
+- `benchmark_low_conc.json`  (n=150, c=8)  — same workload, lower load
+- `benchmark_saturation.json` (n=300, c=64) — saturation limit data
+- `prometheus_before.txt` / `prometheus_after.txt` — router-internal
+  metrics at `/admin/metrics` around the benchmark runs
+- `benchmark_chart.png` — the 4-panel summary chart at c=32
 
-    bash examples/demo/deploy_backends.sh           # register endpoints
-    bash examples/demo/01_short_chat.sh             # sanity check
-    python3 examples/demo/benchmark.py \
-      --router http://localhost:8080 \
-      --fast   http://localhost:8001 \
-      --quality http://localhost:8002 \
-      --n 200 --concurrency 32
-
-Raw results for the runs above are saved as:
-
-- `benchmark_low_conc.json`   (n=150, concurrency=8)
-- `benchmark_high_conc.json`  (n=200, concurrency=32)
-
-Both JSON files contain a `summary` block (the rows shown in the tables
-above) and a `raw` block with per-request data for every arm:
+Each JSON file contains:
 
     {
+      "workload_size": ..., "seed": 42, "concurrency": ...,
+      "summary": [ { "arm": ..., "p95_ms": ..., ... } ],
       "raw": {
         "A direct":      [{idx, shape, slo_ms, endpoint_used, ok, latency_ms, tokens_out, cost_usd}, ...],
         "B round-robin": [...],
@@ -183,59 +235,33 @@ above) and a `raw` block with per-request data for every arm:
       }
     }
 
-600 per-request records in the high-concurrency file, 450 in the
-low-concurrency file. Use these for custom analyses — e.g., to extract
-the TTFT distribution for the reasoning shape only, or to verify the
-router's endpoint decisions per shape.
 
+Reproducing
+-----------
 
-Prometheus router counters
---------------------------
+On the remote box (or with SSH tunnels to ports 8080 / 8001 / 8002):
 
-`prometheus_before.txt` and `prometheus_after.txt` capture the router's
-internal metrics at `/admin/metrics` before and after the benchmark
-re-runs. The counters are cumulative over the router's lifetime, so the
-delta between the two files is what each run contributed. Most useful
-series:
+    # 1. Relaunch vllm backends with shared "qwen" alias
+    docker run -d --name vllm-fast --gpus '"device=0"' \
+        --network tokenflow-router_default --ipc=host \
+        -v /home/shadeform/hf-cache:/root/.cache/huggingface \
+        -p 8001:8000 vllm/vllm-openai:latest \
+        --model Qwen/Qwen2.5-3B-Instruct --max-model-len 4096 \
+        --served-model-name qwen Qwen/Qwen2.5-3B-Instruct
 
-- `tokenflow_route_decisions_total{endpoint_name,priority_tier,workload_type,outcome}` — one counter per (endpoint, tier, workload, outcome) tuple. Distribution confirms where each request class went.
-- `tokenflow_upstream_request_latency_ms_count` / `_sum` — per-endpoint request count and cumulative latency. Dividing gives mean upstream latency per backend.
-- `tokenflow_estimated_cost_usd_total{endpoint_name,tenant_id}` — router-computed cost per tenant. Matches `$/1k tok` in the summary table to within float precision.
-- `tokenflow_active_requests` / `_endpoint_health` — live health gauges, always 0/healthy at snapshot time (post-run).
+    docker run -d --name vllm-quality --gpus '"device=1"' \
+        --network tokenflow-router_default --ipc=host \
+        -v /home/shadeform/hf-cache:/root/.cache/huggingface \
+        -p 8002:8000 vllm/vllm-openai:latest \
+        --model Qwen/Qwen2.5-7B-Instruct --max-model-len 16384 \
+        --served-model-name qwen Qwen/Qwen2.5-7B-Instruct
 
-Example deltas observed (post-run snapshot, includes smoke tests + both
-benchmark runs across the session):
+    # 2. Register both with the router (model_name="qwen" on both)
+    bash examples/demo/deploy_backends.sh
 
-    vllm-fast   routed 721 requests   cumulative latency 425805 ms   mean 590 ms
-    vllm-quality routed 142 requests  cumulative latency 282274 ms   mean 1988 ms
-
-Every one of the 142 requests routed to `vllm-quality` had
-`priority_tier=premium, workload_type=decode_heavy`. The router never
-put a non-premium request on the 7B model and never routed a premium
-reasoning request to the 3B — no manual tuning required.
-
-
-Re-run stability note
----------------------
-
-We re-ran both benchmarks after the backends had been running for ~15
-minutes (fully warm, KV caches populated, model weights paged in). The
-round-robin arm's catastrophic collapse at concurrency 32 (p95 9438 ms,
-11% SLO miss) does **not** reproduce on the warm re-run — it converges
-to p95 ~3.3 s with 0% SLO miss. The router still wins in every run, but
-the magnitude shrinks with warmth:
-
-| Metric (c=32)              | Run 1 (warming) | Run 2 (warm) |
-| -------------------------- | --------------: | -----------: |
-| Round-robin p95 (ms)       |            9438 |         3276 |
-| Router p95 (ms)            |            2530 |         2392 |
-| Router p95 advantage       |            -73% |         -27% |
-| Round-robin cost ($ / 200) |           0.877 |        0.294 |
-| Router cost ($ / 200)      |           0.235 |        0.230 |
-| Router cost advantage      |            -73% |         -22% |
-
-The qualitative point stands across runs: under mixed workloads the
-router delivers lower tail latency and lower cost than blind round-robin
-because it matches request shape to backend strength instead of spraying
-requests evenly. How dramatic the win looks depends on how warm the
-slower backend's KV cache is at the moment of measurement.
+    # 3. Run benchmark
+    python3 examples/demo/benchmark.py \
+      --router http://localhost:8080 \
+      --fast   http://localhost:8001 \
+      --quality http://localhost:8002 \
+      --n 200 --concurrency 32

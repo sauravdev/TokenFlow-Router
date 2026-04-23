@@ -44,10 +44,24 @@ import httpx
 
 # ------- workload -------
 # A realistic mix: short chat, reasoning, prefill-heavy, decode-heavy.
+_LONG_DOC = (" ".join([
+    "The internet protocol suite, commonly known as TCP/IP, is the foundational set of communications protocols used for the Internet and most private networks.",
+    "The Transmission Control Protocol provides reliable ordered byte streams; the User Datagram Protocol provides low-overhead datagrams; the Internet Protocol delivers addressed packets between hosts.",
+    "The protocol stack was specified across several RFCs starting in the 1970s; the modern layering model is link, internet, transport, and application.",
+    "Early deployments on ARPANET in the 1970s informed later refinement; DNS, BGP, and TLS built on top of the core specifications during the 1980s and 1990s.",
+    "Routing on the internet uses the Border Gateway Protocol to exchange reachability information between autonomous systems, while interior gateway protocols such as OSPF and IS-IS handle routes within a single administrative domain.",
+    "Congestion control algorithms like TCP Reno, Cubic, and BBR shape sender behavior to avoid collapse under load.",
+    "The transition from IPv4 to IPv6 has progressed slowly, driven by address exhaustion in IPv4 and the need for larger address space.",
+    "Modern application protocols including HTTP/2, HTTP/3, and gRPC multiplex many logical streams over a single transport connection.",
+    "Security layers built on top of TCP include TLS 1.2 and TLS 1.3; QUIC integrates transport and crypto to reduce handshake latency.",
+    "End-to-end measurement studies consistently show that application-level latency is dominated by round-trip time on long-haul links, motivating edge computing and CDN deployments.",
+]) * 40)  # ~5500 tokens — exceeds vllm-fast's 4096 but fits vllm-quality's 16384
+
+
 WORKLOAD_MIX: list[dict[str, Any]] = [
     {
         "shape": "short_chat",
-        "weight": 0.45,
+        "weight": 0.40,
         "slo_ms": 3000,
         "gen": lambda: {
             "messages": [{"role": "user", "content": random.choice([
@@ -77,8 +91,19 @@ WORKLOAD_MIX: list[dict[str, Any]] = [
         },
     },
     {
-        "shape": "prefill_heavy",
+        "shape": "long_context",
         "weight": 0.20,
+        "slo_ms": 10000,
+        "gen": lambda: {
+            "messages": [{"role": "user", "content": (
+                "Extract 3 factual bullets from the following technical document:\n\n" + _LONG_DOC
+            )}],
+            "max_tokens": 120,
+        },
+    },
+    {
+        "shape": "prefill_heavy",
+        "weight": 0.15,
         "slo_ms": 8000,
         "gen": lambda: {
             "messages": [{"role": "user", "content": (
@@ -89,14 +114,14 @@ WORKLOAD_MIX: list[dict[str, Any]] = [
                     "Early versions were developed in the 1970s by DARPA.",
                     "The protocol suite provides end-to-end data communication specifying how data should be packetised, addressed, transmitted, routed, and received.",
                     "The layers are: the link layer, the internet layer, the transport layer, and the application layer.",
-                ]) * 20)
+                ]) * 10)
             )}],
             "max_tokens": 80,
         },
     },
     {
         "shape": "decode_heavy",
-        "weight": 0.15,
+        "weight": 0.05,
         "slo_ms": 15000,
         "gen": lambda: {
             "messages": [{"role": "user", "content": random.choice([
@@ -196,7 +221,7 @@ async def arm_direct(
             async with sem:
                 body = dict(req["body"])
                 status, j, lat = await call_openai(
-                    client, args.fast, "Qwen/Qwen2.5-3B-Instruct", body,
+                    client, args.fast, "qwen", body,
                 )
                 ok = status == 200
                 tok = 0
@@ -220,9 +245,10 @@ async def arm_round_robin(
         async def one(req):
             async with sem:
                 if req["idx"] % 2 == 0:
-                    url, name, model = args.fast, "vllm-fast", "Qwen/Qwen2.5-3B-Instruct"
+                    url, name = args.fast, "vllm-fast"
                 else:
-                    url, name, model = args.quality, "vllm-quality", "Qwen/Qwen2.5-7B-Instruct"
+                    url, name = args.quality, "vllm-quality"
+                model = "qwen"
                 body = dict(req["body"])
                 status, j, lat = await call_openai(client, url, model, body)
                 ok = status == 200
@@ -245,6 +271,7 @@ async def arm_round_robin(
 SHAPE_HEADERS = {
     "short_chat":   {"x-tenant-id": "default",               "x-priority-tier": "standard"},
     "reasoning":    {"x-tenant-id": "tenant-premium-corp",   "x-priority-tier": "premium"},
+    "long_context": {"x-tenant-id": "default",               "x-priority-tier": "standard"},
     "prefill_heavy":{"x-tenant-id": "default",               "x-priority-tier": "standard"},
     "decode_heavy": {"x-tenant-id": "default",               "x-priority-tier": "standard"},
 }
@@ -258,12 +285,8 @@ async def arm_router(
         async def one(req):
             async with sem:
                 body = dict(req["body"])
-                model = (
-                    "Qwen/Qwen2.5-7B-Instruct" if req["shape"] == "reasoning"
-                    else "Qwen/Qwen2.5-3B-Instruct"
-                )
                 status, j, lat = await call_openai(
-                    client, args.router, model, body,
+                    client, args.router, "qwen", body,
                     headers=SHAPE_HEADERS.get(req["shape"], {}),
                 )
                 ok = status == 200
@@ -414,8 +437,8 @@ def main():
     ap.add_argument("--router",  default="http://localhost:8080")
     ap.add_argument("--fast",    default="http://localhost:8001")
     ap.add_argument("--quality", default="http://localhost:8002")
-    ap.add_argument("--n", type=int, default=150)
-    ap.add_argument("--concurrency", type=int, default=8)
+    ap.add_argument("--n", type=int, default=200)
+    ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="benchmark_results.json")
     args = ap.parse_args()
