@@ -18,13 +18,33 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from tokenflow.classifier import RequestClassifier
 from tokenflow.config import settings
-from tokenflow.models import OptimizationTarget, PriorityTier
+from tokenflow.models import OptimizationTarget, PriorityTier, TelemetryUpdate
 from tokenflow.observability import ACTIVE_REQUESTS
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 classifier = RequestClassifier()
+
+
+async def _feed_back_latency(state, endpoint_id: str, ttft_ms: float | None, e2e_ms: float):
+    """Push actual measured latency back into the telemetry store.
+
+    This closes the feedback loop: real inference latency from the upstream
+    response updates the EMA-smoothed telemetry, which future routing
+    decisions use. Without this, the store only has scrape-interval data
+    and heuristic estimates.
+    """
+    try:
+        update = TelemetryUpdate(
+            endpoint_id=endpoint_id,
+            p95_e2e_ms=e2e_ms,
+        )
+        if ttft_ms is not None:
+            update.p95_ttft_ms = ttft_ms
+        await state.telemetry_store.upsert(update)
+    except Exception:
+        pass
 
 
 def _get_app_state(request: Request):
@@ -133,6 +153,9 @@ async def chat_completions(
                 state.trace_store.record_actual_latency(
                     profile.request_id, endpoint.name, None, e2e_ms
                 )
+                asyncio.create_task(
+                    _feed_back_latency(state, endpoint.id, None, e2e_ms)
+                )
                 await state.policy_engine.record_cost(
                     profile.tenant_id, decision.estimated_cost_usd
                 )
@@ -224,6 +247,9 @@ async def _stream_response(request, state, profile, decision, endpoint, body, ca
             ACTIVE_REQUESTS.labels(endpoint_name=endpoint.name).dec()
             state.trace_store.record_actual_latency(
                 profile.request_id, endpoint.name, ttft_ms, e2e_ms
+            )
+            asyncio.create_task(
+                _feed_back_latency(state, endpoint.id, ttft_ms, e2e_ms)
             )
             await state.policy_engine.record_cost(
                 profile.tenant_id, decision.estimated_cost_usd

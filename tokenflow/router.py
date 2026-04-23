@@ -298,13 +298,30 @@ class ScoringEngine:
             req.optimization_target,
         )
 
-        if req.optimization_target.value == "latency":
-            bench = get_backend_benchmark(ep.backend_type)
-            # Penalize cold starts for interactive requests unless operator marks endpoint warm.
-            warm = bool(ep.capability_flags.get("warm", False))
-            if not warm and req.latency_class == LatencyClass.INTERACTIVE:
-                penalty = min(bench.cold_start_penalty_ms / 4000.0, 0.35)
-                score -= penalty
+        warm = bool(ep.capability_flags.get("warm", False))
+        bench = get_backend_benchmark(ep.backend_type)
+
+        if not warm:
+            # Cold-start penalty applies to all optimization targets, scaled by
+            # how latency-sensitive the request is. Interactive requests get the
+            # full penalty; batch/offline requests get a mild one.
+            if req.latency_class == LatencyClass.INTERACTIVE:
+                penalty = min(bench.cold_start_penalty_ms / 3000.0, 0.40)
+            elif req.latency_class == LatencyClass.STANDARD:
+                penalty = min(bench.cold_start_penalty_ms / 5000.0, 0.25)
+            else:
+                penalty = min(bench.cold_start_penalty_ms / 10000.0, 0.10)
+
+            # Ollama single-model-at-a-time: if another model is loaded,
+            # the swap cost is the full cold-start plus unload time.
+            loaded_models = ep.capability_flags.get("ollama_loaded_models", [])
+            if ep.backend_type == BackendType.OLLAMA and loaded_models:
+                penalty = min(penalty * 1.5, 0.45)
+
+            score -= penalty
+        else:
+            # Warm bonus: reward endpoints that are ready to serve immediately
+            score += 0.05
 
         return _clamp(score)
 
@@ -376,6 +393,21 @@ class ScoringEngine:
             dynamo_hit = ep.capability_flags.get("dynamo_kv_hit_rate", 0.0)
             cache_bonus = max(float(sglang_hit), float(dynamo_hit)) * 0.15  # up to +0.15
             combined += cache_bonus
+
+        # vLLM memory pressure: penalize endpoints whose KV cache is near full.
+        # A saturated KV cache means new requests may be queued or OOM-rejected.
+        vllm_cache = ep.capability_flags.get("vllm_gpu_cache_usage")
+        if vllm_cache is not None and vllm_cache > 0.80:
+            combined -= (vllm_cache - 0.80) * 0.5  # up to -0.10 at 100%
+
+        # Dynamo disaggregated queue imbalance: if one side (prefill or decode)
+        # is much deeper than the other, the endpoint is bottlenecked.
+        prefill_q = ep.capability_flags.get("dynamo_prefill_queue", 0)
+        decode_q = ep.capability_flags.get("dynamo_decode_queue", 0)
+        if prefill_q > 0 and decode_q > 0:
+            imbalance = abs(prefill_q - decode_q) / max(prefill_q, decode_q)
+            if imbalance > 0.5:
+                combined -= imbalance * 0.05  # mild penalty for lopsided queues
 
         return _clamp(combined)
 

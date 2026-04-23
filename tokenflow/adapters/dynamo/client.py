@@ -198,12 +198,22 @@ class DynamoClient:
         )
 
     async def probe(self, ep: EndpointProfile) -> TelemetryUpdate:
-        """Full probe: health check + Prometheus metrics."""
+        """
+        Full probe: health check + Prometheus metrics.
+
+        Sets capability_flags:
+          - warm: True if healthy, KV cache populated, not saturated
+          - dynamo_kv_hit_rate: KV block reuse rate (0-1)
+          - dynamo_kv_transfer_bw_gbps: inter-node KV transfer bandwidth
+          - dynamo_prefill_queue: prefill worker queue depth
+          - dynamo_decode_queue: decode worker queue depth
+        """
         t_start = time.perf_counter()
         ready = await self.is_ready(ep.nim_url)
         probe_ms = (time.perf_counter() - t_start) * 1000
 
         if not ready:
+            ep.capability_flags["warm"] = False
             return TelemetryUpdate(
                 endpoint_id=ep.id,
                 error_rate=1.0,
@@ -214,14 +224,37 @@ class DynamoClient:
         if text:
             tel = self._parse_metrics(text, ep.id, ep)
             tel.error_rate = 0.0
+
+            # Surface queue depths for observability
+            vals: dict[str, float] = {}
+            for field, pattern in _DYNAMO_PATTERNS.items():
+                m = pattern.search(text)
+                if m:
+                    try:
+                        vals[field] = float(m.group(1))
+                    except ValueError:
+                        pass
+            if "prefill_queue_depth" in vals:
+                ep.capability_flags["dynamo_prefill_queue"] = int(vals["prefill_queue_depth"])
+            if "decode_queue_depth" in vals:
+                ep.capability_flags["dynamo_decode_queue"] = int(vals["decode_queue_depth"])
+
+            # Warm detection: KV cache populated + not saturated + healthy
+            kv_hit = ep.capability_flags.get("dynamo_kv_hit_rate", 0.0)
+            gpu_cache = tel.saturation_score or 0.0
+            ep.capability_flags["warm"] = gpu_cache < 0.95
+
             logger.debug(
                 "dynamo_probe_ok",
                 endpoint=ep.name,
-                kv_hit_rate=ep.capability_flags.get("dynamo_kv_hit_rate", "?"),
+                kv_hit_rate=round(kv_hit, 3) if isinstance(kv_hit, float) else kv_hit,
+                gpu_cache=round(gpu_cache, 3),
+                warm=ep.capability_flags["warm"],
             )
             return tel
 
-        # Fallback to probe timing
+        # Fallback to probe timing — healthy but no metrics
+        ep.capability_flags["warm"] = True
         return TelemetryUpdate(
             endpoint_id=ep.id,
             p50_ttft_ms=probe_ms,

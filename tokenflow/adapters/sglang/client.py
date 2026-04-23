@@ -170,12 +170,19 @@ class SGLangClient:
 
         Injects cache_hit_rate into ep.capability_flags so the scoring engine
         can use it as a bonus signal for PREFILL_HEAVY requests.
+
+        Sets capability_flags:
+          - warm: True if endpoint is ready and has capacity
+          - sglang_cache_hit_rate: RadixAttention prefix cache hit rate (0-1)
+          - sglang_token_usage: KV cache fill fraction (0-1)
+          - sglang_context_len: max context length reported by server
         """
         t_start = time.perf_counter()
         ready = await self.is_ready(ep.nim_url)
         probe_ms = (time.perf_counter() - t_start) * 1000
 
         if not ready:
+            ep.capability_flags["warm"] = False
             return TelemetryUpdate(
                 endpoint_id=ep.id,
                 error_rate=1.0,
@@ -184,20 +191,34 @@ class SGLangClient:
 
         info = await self.get_server_info(ep.nim_url)
         if info:
-            # Store cache_hit_rate in capability_flags for routing bonus
             cache_hit_rate = float(info.get("cache_hit_rate", 0.0))
+            token_usage = float(info.get("token_usage", 0.0))
+            context_len = info.get("context_len")
+
             ep.capability_flags["sglang_cache_hit_rate"] = cache_hit_rate
+            ep.capability_flags["sglang_token_usage"] = token_usage
+            if context_len:
+                ep.capability_flags["sglang_context_len"] = context_len
+
+            # Warm if cache is populated and not saturated.
+            # A high cache_hit_rate means the model is loaded and prefix cache
+            # is primed — ideal state for routing prefill-heavy traffic.
+            ep.capability_flags["warm"] = token_usage < 0.95
+
             logger.debug(
                 "sglang_probe_ok",
                 endpoint=ep.name,
                 cache_hit_rate=round(cache_hit_rate, 3),
+                token_usage=round(token_usage, 3),
                 queue=info.get("num_waiting_reqs", "?"),
+                warm=ep.capability_flags["warm"],
             )
             tel = self._server_info_to_telemetry(info, ep.id)
             tel.error_rate = 0.0
             return tel
 
-        # Fall back to probe timing only
+        # Fall back to probe timing only — endpoint is live but no server_info
+        ep.capability_flags["warm"] = True
         return TelemetryUpdate(
             endpoint_id=ep.id,
             p50_ttft_ms=probe_ms,

@@ -214,31 +214,54 @@ class VLLMClient:
         """
         Full probe: health check + Prometheus metrics.
         Falls back to probe-timing estimates if /metrics is unavailable.
+
+        Sets capability_flags:
+          - warm: True if endpoint is healthy and KV cache usage < 95%
+          - vllm_gpu_cache_usage: KV cache fill fraction (0-1)
+          - vllm_has_metrics: True if /metrics endpoint is available
         """
         t_start = time.perf_counter()
         ready = await self.is_ready(ep.nim_url)
         probe_ms = (time.perf_counter() - t_start) * 1000
 
+        if not ready:
+            ep.capability_flags["warm"] = False
+            ep.capability_flags["vllm_has_metrics"] = False
+            return TelemetryUpdate(
+                endpoint_id=ep.id,
+                error_rate=1.0,
+                saturation_score=1.0,
+            )
+
         metrics = await self.scrape_metrics(ep.nim_url)
         if metrics is not None:
             metrics.endpoint_id = ep.id
-            if not ready:
-                metrics.error_rate = 0.5
+            ep.capability_flags["vllm_has_metrics"] = True
+
+            # KV cache fill as warm signal: if GPU cache is near-full, the
+            # endpoint is under memory pressure and may evict/reject requests.
+            gpu_cache = metrics.saturation_score
+            if gpu_cache is not None:
+                ep.capability_flags["vllm_gpu_cache_usage"] = gpu_cache
+                ep.capability_flags["warm"] = gpu_cache < 0.95
+            else:
+                ep.capability_flags["warm"] = True
+
+            # High queue depth also means the endpoint is struggling
+            if metrics.queue_depth is not None and metrics.queue_depth > 50:
+                ep.capability_flags["warm"] = False
+
             return metrics
 
-        # Fallback to probe timing
-        if ready:
-            return TelemetryUpdate(
-                endpoint_id=ep.id,
-                p50_ttft_ms=probe_ms,
-                p95_ttft_ms=probe_ms * 1.5,
-                p50_e2e_ms=probe_ms,
-                p95_e2e_ms=probe_ms * 2.0,
-                error_rate=0.0,
-                saturation_score=0.0,
-            )
+        # Fallback to probe timing — healthy but no metrics
+        ep.capability_flags["warm"] = True
+        ep.capability_flags["vllm_has_metrics"] = False
         return TelemetryUpdate(
             endpoint_id=ep.id,
-            error_rate=1.0,
-            saturation_score=1.0,
+            p50_ttft_ms=probe_ms,
+            p95_ttft_ms=probe_ms * 1.5,
+            p50_e2e_ms=probe_ms,
+            p95_e2e_ms=probe_ms * 2.0,
+            error_rate=0.0,
+            saturation_score=0.0,
         )

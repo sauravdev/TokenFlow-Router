@@ -139,35 +139,49 @@ class NIMClient:
         """
         Full probe: combines health check timing with metrics scraping.
         Falls back to timing-based estimates if /metrics unavailable.
+
+        Sets capability_flags:
+          - warm: True if the endpoint is healthy and responding
+          - nim_has_metrics: True if /metrics endpoint is available
+          - nim_probe_ms: health check round-trip time
         """
         t_start = time.perf_counter()
         ready = await self.is_ready(ep.nim_url)
         probe_ms = (time.perf_counter() - t_start) * 1000
+
+        ep.capability_flags["nim_probe_ms"] = round(probe_ms, 1)
+
+        if not ready:
+            ep.capability_flags["warm"] = False
+            ep.capability_flags["nim_has_metrics"] = False
+            return TelemetryUpdate(
+                endpoint_id=ep.id,
+                error_rate=1.0,
+                saturation_score=1.0,
+            )
 
         # Try Prometheus metrics first
         metrics_update = await self.scrape_metrics(ep.nim_url)
 
         if metrics_update is not None:
             metrics_update.endpoint_id = ep.id
-            # Fill in error_rate from health
-            if not ready:
-                metrics_update.error_rate = 0.5
+            ep.capability_flags["warm"] = True
+            ep.capability_flags["nim_has_metrics"] = True
+            # Detect if the endpoint is overloaded from queue depth
+            if metrics_update.queue_depth is not None and metrics_update.queue_depth > 50:
+                ep.capability_flags["warm"] = False
             return metrics_update
 
-        # Fall back to probe timing
-        if ready:
-            return TelemetryUpdate(
-                endpoint_id=ep.id,
-                p50_ttft_ms=probe_ms,
-                p95_ttft_ms=probe_ms * 1.5,
-                p50_e2e_ms=probe_ms,
-                p95_e2e_ms=probe_ms * 2.0,
-                error_rate=0.0,
-                saturation_score=0.0,
-            )
-        else:
-            return TelemetryUpdate(
-                endpoint_id=ep.id,
-                error_rate=1.0,
-                saturation_score=1.0,
-            )
+        # Fall back to probe timing — endpoint is healthy but no metrics
+        ep.capability_flags["warm"] = True
+        ep.capability_flags["nim_has_metrics"] = False
+
+        return TelemetryUpdate(
+            endpoint_id=ep.id,
+            p50_ttft_ms=probe_ms,
+            p95_ttft_ms=probe_ms * 1.5,
+            p50_e2e_ms=probe_ms,
+            p95_e2e_ms=probe_ms * 2.0,
+            error_rate=0.0,
+            saturation_score=0.0,
+        )
