@@ -163,8 +163,13 @@ def build_workload(n: int, seed: int) -> list[dict[str, Any]]:
 # ------- cost model -------
 # Matches registration metadata (see deploy script).
 COST_PER_GPU_HOUR = {
-    "vllm-fast": 2.5,     # economy
-    "vllm-quality": 8.0,  # premium
+    # v4 layout — same 7B model, different configs; all on same H100 class
+    "vllm-decode":  4.0,   # short-ctx decode-tuned
+    "vllm-prefill": 4.0,   # long-ctx prefill-tuned
+    "vllm-spec":    4.0,   # single 7B with n-gram speculative decoding
+    # kept for backward compatibility with v3 result files
+    "vllm-fast":    2.5,
+    "vllm-quality": 8.0,
 }
 
 
@@ -215,13 +220,14 @@ async def call_openai(
 async def arm_direct(
     workload: list[dict[str, Any]], args, sem: asyncio.Semaphore
 ) -> list[Result]:
-    """Arm A: every request → vllm-fast only."""
+    """Arm A: every request → vllm-decode only (single backend, low-latency
+    config). Fails long-context requests because max_model_len=4096."""
     async with httpx.AsyncClient() as client:
         async def one(req):
             async with sem:
                 body = dict(req["body"])
                 status, j, lat = await call_openai(
-                    client, args.fast, "qwen", body,
+                    client, args.decode, "qwen", body,
                 )
                 ok = status == 200
                 tok = 0
@@ -230,8 +236,8 @@ async def arm_direct(
                 err = "" if ok else json.dumps(j)[:200]
                 return Result(
                     idx=req["idx"], shape=req["shape"], slo_ms=req["slo_ms"],
-                    endpoint_used="vllm-fast", ok=ok, latency_ms=lat,
-                    error=err, cost_usd=cost_for("vllm-fast", lat),
+                    endpoint_used="vllm-decode", ok=ok, latency_ms=lat,
+                    error=err, cost_usd=cost_for("vllm-decode", lat),
                     tokens_out=tok,
                 )
         return await asyncio.gather(*(one(r) for r in workload))
@@ -240,17 +246,16 @@ async def arm_direct(
 async def arm_round_robin(
     workload: list[dict[str, Any]], args, sem: asyncio.Semaphore
 ) -> list[Result]:
-    """Arm B: alternate between vllm-fast and vllm-quality."""
+    """Arm B: alternate between vllm-decode and vllm-prefill."""
     async with httpx.AsyncClient() as client:
         async def one(req):
             async with sem:
                 if req["idx"] % 2 == 0:
-                    url, name = args.fast, "vllm-fast"
+                    url, name = args.decode, "vllm-decode"
                 else:
-                    url, name = args.quality, "vllm-quality"
-                model = "qwen"
+                    url, name = args.prefill, "vllm-prefill"
                 body = dict(req["body"])
-                status, j, lat = await call_openai(client, url, model, body)
+                status, j, lat = await call_openai(client, url, "qwen", body)
                 ok = status == 200
                 tok = 0
                 if j and "usage" in j:
@@ -277,10 +282,113 @@ SHAPE_HEADERS = {
 }
 
 
+# ------- intent-based router (Arm D baseline) -------
+# A realistic "smart" naive router: reads the prompt, classifies intent by
+# keyword, maps intent -> backend. Does NOT see queue depth, cost, context
+# limits, priority tiers, or tenant policies. This is how most teams build
+# their first "intelligent" router before learning that intent alone isn't
+# enough.
+def classify_intent(messages: list[dict[str, str]]) -> str:
+    """Naive keyword classifier → one of reasoning / summarization /
+    generation / chat. Fast (<0.1 ms) and deterministic."""
+    text = " ".join(m.get("content", "") for m in messages if m.get("role") in ("user", "system")).lower()
+
+    if any(p in text for p in (
+        "step by step", "think step", "derive", "derivation", "prove ",
+        "probability", "show the derivation", "calculation", "analyse the",
+        "analyze the",
+    )):
+        return "reasoning"
+
+    if any(p in text for p in (
+        "summarise", "summarize", "summary", "tl;dr", "extract", "bullet",
+        "in 3 bullets", "in 2 sentences",
+    )):
+        return "summarization"
+
+    if any(p in text for p in (
+        "write a ", "essay", "short story", "400 words", "800 words",
+        "2000-word", "detailed", "400-word",
+    )):
+        return "generation"
+
+    return "chat"
+
+
+# Intent → backend. Heavy intents go to the big model; chat stays small.
+# Notice: every "hard" intent routes to vllm-quality regardless of load.
+INTENT_TO_BACKEND = {
+    # Intent-based routing sends "hard" intents to prefill lane (the bigger/
+    # more-batched one) and "easy" chat to decode lane — matching how many
+    # teams actually wire this up in production.
+    "reasoning":     ("prefill", "vllm-prefill"),
+    "summarization": ("prefill", "vllm-prefill"),
+    "generation":    ("prefill", "vllm-prefill"),
+    "chat":          ("decode",  "vllm-decode"),
+}
+
+
+async def arm_intent(
+    workload: list[dict[str, Any]], args, sem: asyncio.Semaphore
+) -> list[Result]:
+    """Arm C: intent-based classifier routes by prompt text. No awareness of
+    queue, cost, context limits, tenant policy, or backend config — just
+    keywords in the user message."""
+    async with httpx.AsyncClient() as client:
+        async def one(req):
+            async with sem:
+                body = dict(req["body"])
+                intent = classify_intent(body.get("messages", []))
+                lane, name = INTENT_TO_BACKEND[intent]
+                url = args.prefill if lane == "prefill" else args.decode
+                status, j, lat = await call_openai(client, url, "qwen", body)
+                ok = status == 200
+                tok = 0
+                if j and "usage" in j:
+                    tok = int(j["usage"].get("completion_tokens", 0) or 0)
+                err = "" if ok else json.dumps(j)[:200]
+                return Result(
+                    idx=req["idx"], shape=req["shape"], slo_ms=req["slo_ms"],
+                    endpoint_used=name, ok=ok, latency_ms=lat,
+                    error=err, cost_usd=cost_for(name, lat), tokens_out=tok,
+                )
+        return await asyncio.gather(*(one(r) for r in workload))
+
+
+async def arm_spec_decode(
+    workload: list[dict[str, Any]], args, sem: asyncio.Semaphore
+) -> list[Result]:
+    """Arm E: single vLLM with n-gram speculative decoding — no routing.
+    This is the honest alternative to routing when the only reason you had
+    two backends was 'use the big model for hard stuff, small for easy'.
+    Spec decode gives you a single backend that draft-tokenises through
+    n-gram lookup and verifies on the 7B, gaining throughput without the
+    multi-backend complexity."""
+    async with httpx.AsyncClient() as client:
+        async def one(req):
+            async with sem:
+                body = dict(req["body"])
+                status, j, lat = await call_openai(
+                    client, args.spec, "qwen", body,
+                )
+                ok = status == 200
+                tok = 0
+                if j and "usage" in j:
+                    tok = int(j["usage"].get("completion_tokens", 0) or 0)
+                err = "" if ok else json.dumps(j)[:200]
+                return Result(
+                    idx=req["idx"], shape=req["shape"], slo_ms=req["slo_ms"],
+                    endpoint_used="vllm-spec", ok=ok, latency_ms=lat,
+                    error=err, cost_usd=cost_for("vllm-spec", lat),
+                    tokens_out=tok,
+                )
+        return await asyncio.gather(*(one(r) for r in workload))
+
+
 async def arm_router(
     workload: list[dict[str, Any]], args, sem: asyncio.Semaphore
 ) -> list[Result]:
-    """Arm C: everything through the router."""
+    """Arm D: everything through the router."""
     async with httpx.AsyncClient() as client:
         async def one(req):
             async with sem:
@@ -374,10 +482,12 @@ async def main_async(args):
 
     # probe health
     async with httpx.AsyncClient(timeout=5.0) as c:
-        for label, url in [("router", args.router), ("fast", args.fast), ("quality", args.quality)]:
+        probes = [("router", args.router), ("decode", args.decode), ("prefill", args.prefill)]
+        if args.spec:
+            probes.append(("spec", args.spec))
+        for label, url in probes:
             try:
-                path = "/health" if label == "router" else "/health"
-                r = await c.get(f"{url}{path}")
+                r = await c.get(f"{url}/health")
                 print(f"[probe] {label} ({url}): HTTP {r.status_code}")
             except Exception as e:
                 print(f"[probe] {label} ({url}): FAIL — {e}", file=sys.stderr)
@@ -387,11 +497,15 @@ async def main_async(args):
 
     rows = []
     all_raw: dict[str, list[Result]] = {}
-    for arm_name, fn in [
-        ("A direct",        arm_direct),
-        ("B round-robin",   arm_round_robin),
-        ("C router",        arm_router),
-    ]:
+    plan = [
+        ("A direct",             arm_direct),
+        ("B round-robin",        arm_round_robin),
+        ("C intent-based",       arm_intent),
+        ("D router",             arm_router),
+    ]
+    if args.spec:
+        plan.append(("E spec-decode",        arm_spec_decode))
+    for arm_name, fn in plan:
         print(f"\n>> Running arm: {arm_name} ({args.n} requests, concurrency={args.concurrency})")
         t0 = time.perf_counter()
         res = await fn(workload, args, sem)
@@ -435,8 +549,15 @@ async def main_async(args):
 def main():
     ap = argparse.ArgumentParser(description="TokenFlow 3-arm benchmark")
     ap.add_argument("--router",  default="http://localhost:8080")
-    ap.add_argument("--fast",    default="http://localhost:8001")
-    ap.add_argument("--quality", default="http://localhost:8002")
+    ap.add_argument("--decode",  default="http://localhost:8001",
+                    help="low-latency decode-tuned backend (v4) or vllm-fast (v3 compat)")
+    ap.add_argument("--prefill", default="http://localhost:8002",
+                    help="long-ctx prefill-tuned backend (v4) or vllm-quality (v3 compat)")
+    ap.add_argument("--spec",    default=None,
+                    help="optional: single vLLM with n-gram speculative decoding for arm E")
+    # v3-compat aliases
+    ap.add_argument("--fast",    dest="decode",  help=argparse.SUPPRESS)
+    ap.add_argument("--quality", dest="prefill", help=argparse.SUPPRESS)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
