@@ -352,37 +352,47 @@ tokenflow serve --policy-file examples/configs/policy.yaml
 uvicorn tokenflow.main:app --host 0.0.0.0 --port 8080
 ```
 
-### Live demo with two real vLLM backends (`examples/demo/`)
+### Live demo with two real vLLM backends (`examples/production_demo/`)
 
 For an end-to-end walkthrough against *real* model servers — not mock
-endpoints — see `examples/demo/`. The directory contains:
+endpoints — see `examples/production_demo/`. It contains a single
+production-scenario benchmark that puts TokenFlow head-to-head against
+intent-based routing on a multi-tenant SaaS LLM platform:
 
-- **`deploy_backends.sh`** — registers a `vllm-fast` (Qwen2.5-3B, economy)
-  and a `vllm-quality` (Qwen2.5-7B, premium) endpoint with the router.
-- **`01_short_chat.sh` … `06_policy_swap.sh`** — six scenario scripts that
-  each exercise a different DSL rule in the `production-balanced` policy
-  (short chat → fast lane, reasoning → quality lane, tenant override,
-  decision explain, live preset swap, etc.). Each script prints the full
-  decision trace from `/admin/routes/explain/{request_id}`.
-- **`benchmark.py`** — a three-arm harness (`direct` / `round-robin` /
-  `router`) that replays the same seeded workload through each strategy
-  and reports p50/p95/p99 latency, throughput, SLO-miss rate, and cost.
-- **`RESULTS.md`** — writeup from an 8×H100 run. Highlights at
-  concurrency 32: the router delivers **+127% throughput**, **-73% p95
-  latency**, and **-73% cost** vs round-robin across two heterogeneous
-  backends, with a per-request routing overhead of **0.13–0.17 ms**.
+- 3 tenants (free / standard / enterprise) with different budget caps
+  and GPU allowlists
+- 5 workload shapes (chat, reasoning, long-context, summarization,
+  decode-heavy) — sampled deterministically from a fixed seed
+- 2 real vLLM backends (Qwen2.5-3B economy at $2.50/GPU-hr,
+  Qwen2.5-7B premium at $8/GPU-hr)
+- Live policy swap mid-run (balanced → cost-first via `/admin/policy/preset`)
 
-Minimal reproduction once you have two vLLM containers running (one on
-port 8001, one on 8002) and the router on 8080:
+Five things the benchmark exercises in a single ~10-minute run:
+
+1. **Multi-cost-tier optimization** — utility-weighted cost score
+2. **Hard constraints over inferred signals** — long-context (>4k
+   tokens) is structurally rejected from the small-ctx backend
+3. **Per-tenant policy enforcement** — budget caps, GPU allowlists, RPM limits
+4. **Live policy swap** — preset change without restart, traffic mix
+   shifts immediately
+5. **Apples-to-apples** — both arms see the same fleet, same workload,
+   same seed, same duration; only the routing brain differs
+
+Minimal reproduction once you have two vLLM containers running (3B on
+port 8001, 7B on 8002) and the router on 8080:
 
 ```bash
-bash examples/demo/deploy_backends.sh
-python3 examples/demo/benchmark.py \
-  --router http://localhost:8080 \
-  --fast   http://localhost:8001 \
+bash examples/production_demo/setup.sh         # register backends + load policy
+python3 examples/production_demo/benchmark.py \
+  --router  http://localhost:8080 \
+  --fast    http://localhost:8001 \
   --quality http://localhost:8002 \
-  --n 200 --concurrency 32
+  --n 600 --rate 2 --concurrency 8
+python3 examples/production_demo/chart.py      # render headline + per-tenant charts
 ```
+
+See `examples/production_demo/README.md` for the full methodology, the
+multi-tenant policy in `configs/policy.yaml`, and the JSON output schema.
 
 ---
 
@@ -545,10 +555,8 @@ applies a **warmup grace period** (default 120s, configurable via
 - After the grace window expires, the existing `UNHEALTHY` behavior
   resumes for genuine outages.
 
-This was verified end-to-end in the v7 benchmark — see
-`examples/demo/v7/README.md` for a 500-request, 8-min sustained run
-showing the dormant-activation → spin-up → route flow with **95.8%
-success vs intent-based 40%**.
+The dormant-activation → spin-up → route flow is exercised by the
+production scenario in `examples/production_demo/`.
 
 ---
 
@@ -753,33 +761,24 @@ print(result.backend_distribution)
 
 ## Benchmarks
 
-`examples/demo/` contains seven benchmark variants (v1–v7) comparing
-TokenFlow Router against three alternatives — direct-to-single-backend,
-naive round-robin, and intent-based keyword routing — plus
-single-backend speculative decoding. All runs are reproducible against
-real vLLM backends; raw per-request data is committed alongside the
-summaries. See `examples/demo/RESULTS.md` and the per-version READMEs
-for full methodology.
+`examples/production_demo/` contains a single production-scenario
+benchmark that puts TokenFlow head-to-head against intent-based routing
+on a multi-tenant SaaS LLM workload. Same fleet, same workload, same
+seed — only the routing brain differs. See
+`examples/production_demo/README.md` for full methodology.
 
-Headline results across versions (concurrency 32 unless noted):
-
-| Scenario | Setup | Result |
-|---|---|---|
-| **v3 cost tiers** (3B economy + 7B premium) | Mixed workload, 200 req | TokenFlow $0.14 vs intent $0.40 → **65% cheaper** |
-| **v4 same model, different configs** | Qwen2.5-7B on both lanes | TokenFlow +30% throughput, −38% p95, −65% cost vs intent |
-| **v5 noise stress test** | 15% intent + 15% workload-type noise | TokenFlow stays at 100% success; intent drops to 99% (different failure modes) |
-| **v7 dormant auto-spinup** | Premium backend offline at start, 8-min sustained | TokenFlow **95.8% success** vs intent 40% (+55.8 pp) |
-
-The architectural advantages tested are:
+The benchmark exercises six architectural advantages of TokenFlow over
+intent-based routing in a single ~10-minute run:
 
 1. **Multi-signal blended utility** — TokenFlow combines context-fit, queue depth, cost, GPU affinity, model fit, reliability into a weighted score. Intent-based routing reads only the prompt.
 2. **Hard constraints over inferred signals** — context-fit, tenant allowlists, health thresholds are binary filters that don't depend on workload-type inference. Misclassified requests can still land on a viable backend.
-3. **On-demand backend spin-up** — dormant profiles + capacity controller. Intent-based architecturally cannot do this (it has no hook into the cluster).
-4. **Per-tenant policy enforcement** — budget caps, RPM limits, GPU allowlists, priority overrides — read from headers, applied at scoring time.
-5. **Live policy swap** — swap latency-first / balanced / cost-first at runtime, no restart.
+3. **Per-tenant policy enforcement** — budget caps, RPM limits, GPU allowlists, priority overrides — read from headers, applied at scoring time. Intent classifiers don't see tenants.
+4. **Multi-cost-tier optimization** — economy backend at $2.50/GPU-hr vs premium at $8/GPU-hr; weighted cost score routes only what *needs* premium to premium.
+5. **Live policy swap** — swap latency-first / balanced / cost-first at runtime, no restart. The benchmark POSTs `/admin/policy/preset` mid-run and reports pre/post-swap traffic shift.
 6. **Full decision trace** — `GET /admin/routes/explain/{request_id}` returns candidate scores, hard rejections, and which policy rules fired.
 
-Per-request routing overhead: **0.13–0.17 ms** (`_tokenflow.decision_ms` in any response).
+Per-request routing overhead: **0.13–0.17 ms** (`_tokenflow.decision_ms`
+in any response).
 
 ---
 
