@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -47,6 +47,7 @@ class BackendType(str, Enum):
     SGLANG = "sglang"   # SGLang RadixAttention — best for prefix-heavy/shared-prefix (RAG, long context)
     DYNAMO = "dynamo"   # NVIDIA Dynamo — distributed KV-aware routing across worker pools
     OLLAMA = "ollama"   # Ollama — lightweight local serving, good cold-start and edge deployments
+    OPENAI = "openai"   # Frontier API endpoint — OpenAI / Anthropic / OpenRouter / xAI; per-token billing
 
 
 class CostClass(str, Enum):
@@ -128,8 +129,14 @@ class EndpointProfile(BaseModel):
     supports_reasoning: bool = False
     tenant_tags: list[str] = Field(default_factory=list)
     capability_flags: dict[str, Any] = Field(default_factory=dict)
-    # Cost config (USD per GPU-hour)
+    # Cost config (USD per GPU-hour). For OPENAI-backed endpoints the
+    # router converts per-token pricing into an effective hourly rate via
+    # `capability_flags["price_per_1k_input_usd"]` and `..._output_usd`.
     cost_per_gpu_hour: float = Field(default=3.0)
+    # Auth — used to inject Authorization: Bearer <api_key> on outbound
+    # forwards. Only set for OPENAI / frontier-API endpoints. Excluded
+    # from JSON responses so the key never leaks via /admin/endpoints.
+    api_key: Optional[str] = Field(default=None, exclude=True, repr=False)
     # State
     health: EndpointHealth = Field(default=EndpointHealth.UNKNOWN)
     enabled: bool = True
@@ -144,6 +151,10 @@ class EndpointProfile(BaseModel):
     @property
     def completions_url(self) -> str:
         return f"{self.nim_url}/v1/chat/completions"
+
+    @property
+    def models_url(self) -> str:
+        return f"{self.nim_url}/v1/models"
 
 
 class EndpointRegisterRequest(BaseModel):
@@ -163,6 +174,11 @@ class EndpointRegisterRequest(BaseModel):
     tenant_tags: list[str] = Field(default_factory=list)
     capability_flags: dict[str, Any] = Field(default_factory=dict)
     cost_per_gpu_hour: float = 3.0
+    # OPENAI / frontier-API auth: stored on the endpoint, used by the
+    # gateway proxy to inject `Authorization: Bearer <api_key>` on
+    # outbound requests. Never serialised back in /admin/endpoints
+    # responses (excluded on EndpointProfile).
+    api_key: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

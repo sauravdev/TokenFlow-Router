@@ -14,6 +14,7 @@ import structlog
 from tokenflow.adapters.dynamo.client import DynamoClient
 from tokenflow.adapters.nim.client import NIMClient
 from tokenflow.adapters.ollama.client import OllamaClient
+from tokenflow.adapters.openai.client import OpenAIClient
 from tokenflow.adapters.sglang.client import SGLangClient
 from tokenflow.adapters.vllm.client import VLLMClient
 from tokenflow.config import settings
@@ -155,6 +156,7 @@ class TelemetryCollector:
         self._sglang_client: Optional[SGLangClient] = None
         self._dynamo_client: Optional[DynamoClient] = None
         self._ollama_client: Optional[OllamaClient] = None
+        self._openai_client: Optional[OpenAIClient] = None
 
     def register_endpoint(self, ep: EndpointProfile) -> None:
         if not any(e.id == ep.id for e in self._endpoints):
@@ -169,6 +171,7 @@ class TelemetryCollector:
         self._sglang_client = SGLangClient(timeout=8.0)  # health_generate can be slower
         self._dynamo_client = DynamoClient(timeout=5.0)
         self._ollama_client = OllamaClient(timeout=5.0)
+        self._openai_client = OpenAIClient(timeout=5.0)  # frontier-API endpoints
         self._task = asyncio.create_task(self._loop(), name="telemetry_collector")
         logger.info("telemetry_collector_started", interval_s=settings.telemetry_scrape_interval_s)
 
@@ -179,7 +182,7 @@ class TelemetryCollector:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        for client in (self._nim_client, self._vllm_client, self._sglang_client, self._dynamo_client, self._ollama_client):
+        for client in (self._nim_client, self._vllm_client, self._sglang_client, self._dynamo_client, self._ollama_client, self._openai_client):
             if client:
                 await client.close()
         logger.info("telemetry_collector_stopped")
@@ -282,6 +285,10 @@ class TelemetryCollector:
         if ep.backend_type == BackendType.OLLAMA:
             assert self._ollama_client is not None
             return await self._ollama_client.probe(ep)
+
+        if ep.backend_type == BackendType.OPENAI:
+            assert self._openai_client is not None
+            return await self._openai_client.probe(ep)
 
         # Default: NIM (also handles UNKNOWN backend_type gracefully)
         assert self._nim_client is not None

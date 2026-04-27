@@ -53,6 +53,18 @@ rules:
     actions:
       set_latency_class: "interactive"
 
+  - name: complex-reasoning-on-frontier
+    description: >
+      Premium-tier reasoning workloads prefer the frontier API (OpenAI /
+      Anthropic / OpenRouter) when one is registered. Local backends still
+      handle chat / decode / prefill where they're cheaper.
+    priority: 12
+    conditions:
+      priority_tier: "premium"
+      workload_type: "reasoning"
+    actions:
+      set_budget_sensitivity: 0.05   # mostly ignore cost — quality matters
+
 # Per-tenant policies. The router reads these on every request.
 tenant_policies:
   tenant-free:

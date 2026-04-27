@@ -48,10 +48,47 @@ curl -s -X POST "$ROUTER/admin/endpoints" \
     "supports_reasoning": true
   }' | python3 -m json.tool | head -3
 
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  OPENAI_BASE="${OPENAI_BASE_URL:-https://api.openai.com}"
+  OPENAI_MODEL="${OPENAI_MODEL:-gpt-4o-mini}"
+  echo
+  echo "==> Registering openai-frontier (\$OPENAI_API_KEY detected; model=$OPENAI_MODEL)"
+  curl -s -X POST "$ROUTER/admin/endpoints" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"name\": \"openai-frontier\",
+      \"nim_url\": \"$OPENAI_BASE\",
+      \"backend_type\": \"openai\",
+      \"model_name\": \"$OPENAI_MODEL\",
+      \"gpu_name\": \"UNKNOWN\",
+      \"cost_class\": \"premium\",
+      \"cost_per_gpu_hour\": 30.0,
+      \"max_context_tokens\": 128000,
+      \"supports_reasoning\": true,
+      \"api_key\": \"$OPENAI_API_KEY\",
+      \"capability_flags\": {
+        \"frontier\": true,
+        \"price_per_1k_input_usd\": 0.15,
+        \"price_per_1k_output_usd\": 0.60
+      }
+    }" | python3 -m json.tool | head -3
+else
+  echo
+  echo "==> Skipping OpenAI frontier backend (\$OPENAI_API_KEY not set)"
+  echo "    To enable: export OPENAI_API_KEY=sk-... and re-run setup.sh"
+fi
+
 echo
 echo "==> Registered endpoints"
 curl -s "$ROUTER/admin/endpoints" | python3 -c '
 import sys, json
 for e in json.load(sys.stdin):
-    print(f"  {e[\"name\"]:14s}  {e[\"cost_class\"]:9s}  ${e[\"cost_per_gpu_hour\"]}/hr  ctx={e[\"max_context_tokens\"]}")
+    name = e["name"]
+    cost_class = e["cost_class"]
+    rate = e["cost_per_gpu_hour"]
+    ctx = e["max_context_tokens"]
+    bt = e["backend_type"]
+    health = e["health"]
+    line = f"  {name:18s}  {bt:8s}  {cost_class:9s}  ${rate}/hr  ctx={ctx}  {health}"
+    print(line)
 '

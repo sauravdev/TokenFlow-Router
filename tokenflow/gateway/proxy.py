@@ -49,7 +49,11 @@ class UpstreamProxy:
         """Forward a non-streaming request. Returns the NIM JSON response."""
         url = endpoint.completions_url
         req_headers = {"Content-Type": "application/json"}
-        if headers:
+        # If the endpoint has a stored API key (OpenAI / frontier API),
+        # inject Bearer auth — overrides any client-supplied key.
+        if endpoint.api_key:
+            req_headers["Authorization"] = f"Bearer {endpoint.api_key}"
+        elif headers:
             # Pass through Authorization header if present
             for k in ("Authorization", "authorization", "x-api-key"):
                 if k in headers:
@@ -90,7 +94,9 @@ class UpstreamProxy:
         """
         url = endpoint.completions_url
         req_headers = {"Content-Type": "application/json"}
-        if headers:
+        if endpoint.api_key:
+            req_headers["Authorization"] = f"Bearer {endpoint.api_key}"
+        elif headers:
             for k in ("Authorization", "authorization", "x-api-key"):
                 if k in headers:
                     req_headers[k] = headers[k]

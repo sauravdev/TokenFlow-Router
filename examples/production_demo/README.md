@@ -27,14 +27,23 @@ Mixed workload (per request, sampled with a fixed seed):
 | summarization  | 12% |    80  | ~1.5k-token input → short bullets              |
 | decode_heavy   |  8% |   350  | long generation                                |
 
-Two real vLLM backends, both serving Qwen2.5 under the alias `qwen`:
+Two real vLLM backends, both serving Qwen2.5 under the alias `qwen`,
+plus an optional frontier-API backend:
 
-| Lane          | Model                      | Cost      | max_ctx | role                |
-| ------------- | -------------------------- | --------: | ------: | ------------------- |
-| vllm-fast     | Qwen/Qwen2.5-3B-Instruct   | $2.50/hr  |   4,096 | economy / chat      |
-| vllm-quality  | Qwen/Qwen2.5-7B-Instruct   | $8.00/hr  |  32,768 | premium / long-ctx  |
+| Lane            | Model                      | Cost                 | max_ctx | role                       |
+| --------------- | -------------------------- | -------------------: | ------: | -------------------------- |
+| vllm-fast       | Qwen/Qwen2.5-3B-Instruct   | $2.50/hr             |   4,096 | economy / chat             |
+| vllm-quality    | Qwen/Qwen2.5-7B-Instruct   | $8.00/hr             |  32,768 | premium / long-ctx         |
+| openai-frontier | gpt-4o-mini *(optional)*   | $0.15+0.60 per 1M tok | 128,000 | premium reasoning          |
 
-Both arms see both backends. The only difference is the routing brain.
+Frontier registration is optional — `setup.sh` registers it only when
+`OPENAI_API_KEY` is exported. With it, the policy's
+`complex-reasoning-on-frontier` rule (priority 12) routes
+`priority_tier=premium AND workload_type=reasoning` requests to the
+frontier API, while chat / prefill / long-context keep going to local
+GPUs. Without it, the demo runs as a 2-backend comparison.
+
+Both arms see the same backend set. The only difference is the routing brain.
 
 
 What this benchmark exercises
