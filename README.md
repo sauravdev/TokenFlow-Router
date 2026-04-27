@@ -389,10 +389,16 @@ python3 examples/demo/benchmark.py \
 ## CLI
 
 ```bash
+# Interactive setup wizard (first run) — no YAML required
+tokenflow init                    # walks you through environment, backends, policy
+tokenflow init --apply            # also brings the router up via docker compose
+tokenflow init --resume           # resume a previous interactive session
+
 # Start the server
 tokenflow serve --port 8080 --policy-file examples/configs/policy.yaml
 
-# Register an endpoint (any backend)
+# Register an endpoint (any backend) — or rely on the wizard's
+# auto-generated .tokenflow/register_endpoints.sh
 tokenflow register \
   --name vllm-h200 \
   --url http://vllm-host:8000 \
@@ -404,7 +410,7 @@ tokenflow register \
 # List endpoints
 tokenflow list
 
-# Switch routing preset
+# Switch routing preset (live, no restart)
 tokenflow policy preset latency-first   # or: balanced, cost-first
 
 # Explain a routing decision
@@ -506,6 +512,8 @@ The sample now includes:
   - `systemd`
   - Docker
   - Kubernetes (`kubectl scale`)
+  - **AWS Spot** / **Azure Spot VMs** / **GCP Spot VMs**
+    (see `examples/autoscale/spot_adapter.py`)
 
 Example:
 
@@ -520,6 +528,27 @@ This sample also lines up with the response headers exposed to external callers:
 - `X-TokenFlow-Active-Backend`
 - `X-TokenFlow-Active-Endpoint`
 - `X-TokenFlow-Turn-Down-Candidates`
+
+### Endpoint warmup grace
+
+When the router auto-activates a dormant profile, the new endpoint's
+container can take 30–60 seconds to boot. During that window, telemetry
+probes will fail (connection refused). To prevent the endpoint from
+being prematurely flipped to `UNHEALTHY`, the telemetry collector
+applies a **warmup grace period** (default 120s, configurable via
+`TOKENFLOW_ENDPOINT_WARMUP_GRACE_S`):
+
+- A failed probe within `endpoint_warmup_grace_s` of `registered_at`
+  is logged but does **not** mark the endpoint unhealthy.
+- The endpoint stays `UNKNOWN` (still routable) until the container
+  becomes reachable.
+- After the grace window expires, the existing `UNHEALTHY` behavior
+  resumes for genuine outages.
+
+This was verified end-to-end in the v7 benchmark — see
+`examples/demo/v7/README.md` for a 500-request, 8-min sustained run
+showing the dormant-activation → spin-up → route flow with **95.8%
+success vs intent-based 40%**.
 
 ---
 
@@ -722,6 +751,38 @@ print(result.backend_distribution)
 
 ---
 
+## Benchmarks
+
+`examples/demo/` contains seven benchmark variants (v1–v7) comparing
+TokenFlow Router against three alternatives — direct-to-single-backend,
+naive round-robin, and intent-based keyword routing — plus
+single-backend speculative decoding. All runs are reproducible against
+real vLLM backends; raw per-request data is committed alongside the
+summaries. See `examples/demo/RESULTS.md` and the per-version READMEs
+for full methodology.
+
+Headline results across versions (concurrency 32 unless noted):
+
+| Scenario | Setup | Result |
+|---|---|---|
+| **v3 cost tiers** (3B economy + 7B premium) | Mixed workload, 200 req | TokenFlow $0.14 vs intent $0.40 → **65% cheaper** |
+| **v4 same model, different configs** | Qwen2.5-7B on both lanes | TokenFlow +30% throughput, −38% p95, −65% cost vs intent |
+| **v5 noise stress test** | 15% intent + 15% workload-type noise | TokenFlow stays at 100% success; intent drops to 99% (different failure modes) |
+| **v7 dormant auto-spinup** | Premium backend offline at start, 8-min sustained | TokenFlow **95.8% success** vs intent 40% (+55.8 pp) |
+
+The architectural advantages tested are:
+
+1. **Multi-signal blended utility** — TokenFlow combines context-fit, queue depth, cost, GPU affinity, model fit, reliability into a weighted score. Intent-based routing reads only the prompt.
+2. **Hard constraints over inferred signals** — context-fit, tenant allowlists, health thresholds are binary filters that don't depend on workload-type inference. Misclassified requests can still land on a viable backend.
+3. **On-demand backend spin-up** — dormant profiles + capacity controller. Intent-based architecturally cannot do this (it has no hook into the cluster).
+4. **Per-tenant policy enforcement** — budget caps, RPM limits, GPU allowlists, priority overrides — read from headers, applied at scoring time.
+5. **Live policy swap** — swap latency-first / balanced / cost-first at runtime, no restart.
+6. **Full decision trace** — `GET /admin/routes/explain/{request_id}` returns candidate scores, hard rejections, and which policy rules fired.
+
+Per-request routing overhead: **0.13–0.17 ms** (`_tokenflow.decision_ms` in any response).
+
+---
+
 ## Positioning
 
 | Layer | Responsibility | Who owns it |
@@ -761,6 +822,11 @@ This section reflects the current maturity of the codebase so contributors and u
 | Admin API auth | Optional `TOKENFLOW_ADMIN_API_KEY` enforced on all `/admin/*` routes |
 | CORS hardening | Configurable `TOKENFLOW_ALLOWED_ORIGINS` (default `*` for local dev) |
 | Dynamic backend profiles | Dormant backend templates with `workload_affinity`, synchronous first-use activation, single-owner model residency, and idle deactivation |
+| Endpoint warmup grace | Newly-activated dormant endpoints stay routable as `UNKNOWN` during container boot; configurable `TOKENFLOW_ENDPOINT_WARMUP_GRACE_S` (default 120s) |
+| Interactive onboarding | `tokenflow init` Rich-based wizard generates policy.yaml, .env, and register_endpoints.sh — no hand-edited YAML required |
+| One-click installer | `scripts/install.sh` detects environment, sets up venv, runs the wizard, optionally brings up Docker Compose |
+| Helm chart | `deploy/k8s/helm/tokenflow-router/` with Deployment, Service, ConfigMap, optional HPA + ServiceMonitor — production-shaped for EKS / AKS / GKE / k3s |
+| Spot capacity adapters | `examples/autoscale/spot_adapter.py` — AWS Spot, Azure Spot VMs, GCP Spot VMs adapters with start/stop/preemption-check, plug into the existing capacity controller |
 
 ### Partially implemented / known gaps
 
@@ -768,10 +834,10 @@ This section reflects the current maturity of the codebase so contributors and u
 |---|---|
 | Token estimation accuracy | tiktoken cl100k_base is ~1–2% accurate for most models; not byte-perfect for every model family |
 | Registry persistence | In-memory only — endpoints lost on restart, no disk/DB persistence |
-| Endpoint health on registration | No initial health check at registration time; relies on background polling |
 | Streaming TTFT measurement | Measures TTFT from first SSE chunk, which may include proxy overhead |
 | Policy conflict resolution | Tenant policy + DSL rules can produce conflicting overrides; last-rule-wins semantics |
-| Dynamic profile lifecycle | Idle deactivation is time-based and registry-scoped; TokenFlow still does not launch/stop external containers or VMs directly |
+| Spot adapter validation | AWS / Azure / GCP adapters are interface + reference implementations; vendor CLI flags should be validated against current docs before production use (capacity-pool exhaustion, IMDSv2, hibernation modes have edge cases) |
+| Onboarding non-interactive | `tokenflow init` is interactive only — no `--non-interactive` flag yet for unattended CI/CD scenarios |
 
 ### Planned / roadmap
 
