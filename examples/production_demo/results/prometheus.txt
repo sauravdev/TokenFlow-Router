@@ -1,0 +1,17 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-fast",tenant_id="tenant-enterprise"} 0.009614583333333336
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-fast",tenant_id="tenant-free"} 0.022074074074074086
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-fast",tenant_id="tenant-standard"} 0.02385358796296299
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-quality",tenant_id="tenant-enterprise"} 0.04762222222222222
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-quality",tenant_id="tenant-standard"} 0.2777962962962964
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="batch",workload_type="balanced"} 119.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="batch",workload_type="decode_heavy"} 74.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="batch",workload_type="prefill_heavy"} 25.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="premium",workload_type="balanced"} 35.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="premium",workload_type="decode_heavy"} 31.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="premium",workload_type="prefill_heavy"} 14.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="standard",workload_type="balanced"} 111.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="standard",workload_type="decode_heavy"} 78.0
+tokenflow_route_decisions_total{endpoint_name="vllm-fast",outcome="success",priority_tier="standard",workload_type="prefill_heavy"} 31.0
+tokenflow_route_decisions_total{endpoint_name="vllm-quality",outcome="success",priority_tier="premium",workload_type="prefill_heavy"} 6.0
+tokenflow_route_decisions_total{endpoint_name="vllm-quality",outcome="success",priority_tier="standard",workload_type="prefill_heavy"} 35.0
