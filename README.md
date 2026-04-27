@@ -2,7 +2,7 @@
 
 > **Route every token to the right GPU lane.**
 
-TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo, Ollama) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
+TokenFlow Router is an open-source, request-aware policy router that sits in front of multiple inference backends (NIM, vLLM, SGLang, Dynamo, Ollama, and frontier APIs like OpenAI/Anthropic/OpenRouter) and decides — per request — which model endpoint, GPU pool, and service tier should serve it.
 
 ## TL;DR
 
@@ -214,7 +214,7 @@ cloud CLIs), then `tokenflow init` walks you through:
 
   1. picking a deployment target (Docker / Kubernetes / bare-metal)
   2. picking a routing policy preset (latency-first / balanced / cost-first)
-  3. registering one or more backends (NIM / vLLM / SGLang / Dynamo / Ollama)
+  3. registering one or more backends (NIM / vLLM / SGLang / Dynamo / Ollama / OpenAI-compatible frontier APIs)
      via interactive prompts
   4. (optional) enabling dormant-backend auto-spin-up
   5. (optional) wiring a spot / preemptible adapter for cloud capacity
@@ -767,6 +767,23 @@ on a multi-tenant SaaS LLM workload. Same fleet, same workload, same
 seed — only the routing brain differs. See
 `examples/production_demo/README.md` for full methodology.
 
+**Live result on 2× H200, 600 requests / arm, ~10 min:**
+
+| Metric                       | Intent-based | **TokenFlow** | Δ        |
+| ---------------------------- | -----------: | ------------: | -------: |
+| Success rate                 |       100.0% |         93.2% | −6.8 pp  |
+| p50 latency                  |        423 ms|        275 ms | −35%     |
+| p95 latency                  |      1,827 ms|      1,175 ms | −36%     |
+| **Total cost (600 req)**     |      $0.816  |   **$0.210**  | **−74%** |
+| Cost per 1k tokens           |     $0.0112  |     $0.0031   | −72%     |
+
+Per-tenant cost reduction: free −82%, standard −67%, enterprise −73%.
+The 6.8 pp success drop is concentrated in free-tier long-context — a
+deliberate cost-first batch-policy refusal (the router declines to
+spend premium GPU dollars on a free-tier request that its 4k-context
+economy lane can't fit) — not a bug. Intent-based has no concept of
+tenants and silently spends 5× more keeping all requests succeeding.
+
 The benchmark exercises six architectural advantages of TokenFlow over
 intent-based routing in a single ~10-minute run:
 
@@ -803,7 +820,8 @@ This section reflects the current maturity of the codebase so contributors and u
 | Area | Details |
 |---|---|
 | Endpoint registry | Register, list, enable/disable, delete endpoints via REST API |
-| Multi-backend support | NIM, vLLM, SGLang, Dynamo — with per-backend telemetry adapters |
+| Multi-backend support | NIM, vLLM, SGLang, Dynamo, Ollama, **OpenAI / frontier APIs** — with per-backend telemetry adapters |
+| Frontier API routing | OpenAI-compatible adapter (works with OpenAI, Anthropic, OpenRouter, xAI, Together, Fireworks). Per-endpoint API key stored on registration, injected as `Authorization: Bearer` on outbound forwards, never serialised back via `/admin/endpoints` |
 | Scoring engine | 6-component weighted utility function (SLO, cost, queue, GPU affinity, model fit, reliability) |
 | GPU tier hierarchy | B200 → H200 → H100 → A100 → L40S → ... → CPU |
 | Backend affinity | Per-backend multipliers per workload type (prefill-heavy, decode-heavy, balanced, reasoning) |
