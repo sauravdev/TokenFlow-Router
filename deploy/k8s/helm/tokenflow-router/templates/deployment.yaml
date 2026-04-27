@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tokenflow.fullname" . }}
+  labels:
+    {{- include "tokenflow.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "tokenflow.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tokenflow.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/policy: {{ .Values.policy.content | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "tokenflow.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: tokenflow
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: TOKENFLOW_HOST
+              value: "0.0.0.0"
+            - name: TOKENFLOW_PORT
+              value: "8080"
+            - name: TOKENFLOW_LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: TOKENFLOW_DEFAULT_POLICY
+              value: {{ .Values.config.defaultPolicy | quote }}
+            - name: TOKENFLOW_POLICY_FILE
+              value: "/etc/tokenflow/policy.yaml"
+            - name: TOKENFLOW_ENABLE_METRICS
+              value: {{ .Values.config.enableMetrics | quote }}
+            - name: TOKENFLOW_ENDPOINT_WARMUP_GRACE_S
+              value: {{ .Values.config.endpointWarmupGraceSeconds | quote }}
+            - name: TOKENFLOW_TELEMETRY_SCRAPE_INTERVAL_S
+              value: {{ .Values.config.scrapeIntervalSeconds | quote }}
+            - name: TOKENFLOW_TELEMETRY_STALE_THRESHOLD_S
+              value: {{ .Values.config.staleThresholdSeconds | quote }}
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/tokenflow
+              readOnly: true
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ include "tokenflow.fullname" . }}-policy
+            items:
+              - key: policy.yaml
+                path: policy.yaml
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

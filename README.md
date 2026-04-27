@@ -198,7 +198,65 @@ Each backend gets a workload-type affinity multiplier applied to the GPU tier sc
 
 ## Quickstart
 
-### Docker Compose
+### One-click install (recommended)
+
+For the fastest path from clone to running router — no YAML editing —
+use the bundled installer + interactive wizard:
+
+```bash
+git clone https://github.com/sauravdev/TokenFlow-Router
+cd TokenFlow-Router
+./scripts/install.sh
+```
+
+The installer detects your environment (Docker, Kubernetes, GPUs,
+cloud CLIs), then `tokenflow init` walks you through:
+
+  1. picking a deployment target (Docker / Kubernetes / bare-metal)
+  2. picking a routing policy preset (latency-first / balanced / cost-first)
+  3. registering one or more backends (NIM / vLLM / SGLang / Dynamo / Ollama)
+     via interactive prompts
+  4. (optional) enabling dormant-backend auto-spin-up
+  5. (optional) wiring a spot / preemptible adapter for cloud capacity
+
+It writes `examples/configs/policy.yaml`, `.env`, and a runnable
+`.tokenflow/register_endpoints.sh`. State is persisted in
+`.tokenflow/onboarding.json` so you can resume:
+
+```bash
+./scripts/install.sh --resume
+```
+
+If you skipped `--apply`, bring everything up with:
+
+```bash
+docker compose up -d
+.tokenflow/register_endpoints.sh
+curl http://localhost:8080/health
+```
+
+### Kubernetes (EKS, AKS, GKE, k3s)
+
+```bash
+helm install tokenflow deploy/k8s/helm/tokenflow-router \
+  --namespace tokenflow --create-namespace \
+  --set-file policy.content=examples/configs/policy.yaml
+```
+
+The chart includes a `Deployment`, `Service`, `ConfigMap` for the
+policy, optional `HorizontalPodAutoscaler` and `ServiceMonitor`, and a
+ServiceAccount with annotation slots for EKS IRSA / AKS workload
+identity. See `deploy/k8s/helm/tokenflow-router/values.yaml` for tuning
+knobs and cluster-specific examples.
+
+### Spot / preemptible scaling
+
+`examples/autoscale/spot_adapter.py` plugs into the existing capacity
+controller and supports AWS Spot, Azure Spot VMs, and GCP Spot VMs.
+Enable in the wizard, or set `capacityController.enabled=true` in the
+Helm values.
+
+### Docker Compose (manual)
 
 ```bash
 git clone https://github.com/sauravdev/TokenFlow-Router

@@ -1,0 +1,21 @@
+apiVersion: v2
+name: tokenflow-router
+description: TokenFlow Router — request- and fleet-aware policy router for multi-backend LLM inference
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - llm
+  - inference
+  - routing
+  - vllm
+  - nim
+  - sglang
+  - dynamo
+  - ollama
+sources:
+  - https://github.com/sauravdev/TokenFlow-Router
+maintainers:
+  - name: TokenFlow Contributors
+home: https://github.com/sauravdev/TokenFlow-Router
+icon: https://raw.githubusercontent.com/sauravdev/TokenFlow-Router/main/examples/demo/benchmark_chart_v7.png

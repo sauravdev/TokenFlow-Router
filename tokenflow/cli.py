@@ -25,6 +25,30 @@ console = Console()
 
 
 # ---------------------------------------------------------------------------
+# init — interactive onboarding wizard
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def init(
+    workdir: str = typer.Option(".", help="Project directory to write configs into"),
+    apply: bool = typer.Option(
+        False, help="After generating configs, immediately bring up the router via docker compose"
+    ),
+    resume: bool = typer.Option(
+        False, help="Resume a previous interactive session from .tokenflow/onboarding.json"
+    ),
+) -> None:
+    """Interactive setup. Walk through environment, backends, and policy choice; emit
+    policy.yaml + .env + register_endpoints.sh. No YAML editing required."""
+    from pathlib import Path
+
+    from tokenflow.onboarding import run_onboarding
+
+    run_onboarding(workdir=Path(workdir), apply=apply, resume=resume)
+
+
+# ---------------------------------------------------------------------------
 # serve
 # ---------------------------------------------------------------------------
 

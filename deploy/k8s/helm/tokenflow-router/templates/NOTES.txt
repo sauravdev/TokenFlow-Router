@@ -1,0 +1,65 @@
+TokenFlow Router has been installed in namespace `{{ .Release.Namespace }}` as
+release `{{ .Release.Name }}`.
+
+1. Get the router URL:
+
+{{- if eq .Values.service.type "LoadBalancer" }}
+  NOTE: It may take a few minutes for the LoadBalancer to provision an
+  external IP. Watch the status with:
+
+    kubectl get svc -w {{ include "tokenflow.fullname" . }} -n {{ .Release.Namespace }}
+
+  Once the EXTERNAL-IP is populated:
+
+    export ROUTER_URL=http://$(kubectl get svc {{ include "tokenflow.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):{{ .Values.service.port }}
+{{- else if eq .Values.service.type "ClusterIP" }}
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "tokenflow.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }} &
+    export ROUTER_URL=http://localhost:{{ .Values.service.port }}
+{{- end }}
+
+2. Sanity-check:
+
+    curl $ROUTER_URL/health
+    curl $ROUTER_URL/v1/models
+
+3. Register your inference backends (NIM / vLLM / SGLang / Dynamo / Ollama):
+
+    curl -X POST $ROUTER_URL/admin/endpoints \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "name": "vllm-prod",
+        "nim_url": "http://vllm.tokenflow.svc.cluster.local:8000",
+        "backend_type": "vllm",
+        "model_name": "meta/llama-3.1-8b-instruct",
+        "gpu_name": "H100",
+        "max_context_tokens": 32768
+      }'
+
+4. Open the OpenAPI / swagger UI in a browser:
+
+    $ROUTER_URL/docs
+
+5. Send your first inference request — the router exposes an OpenAI-compatible
+   endpoint:
+
+    curl -X POST $ROUTER_URL/v1/chat/completions \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "model": "meta/llama-3.1-8b-instruct",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 64
+      }'
+
+──────────────────────────────────────────────────────────────────────────────
+Cluster-specific tips:
+
+  EKS:  set service.annotations to use AWS Load Balancer Controller (NLB/ALB)
+  AKS:  set service.annotations.service.beta.kubernetes.io/azure-load-balancer-internal
+  GKE:  set service.type=LoadBalancer to get a Google Cloud LB
+
+  Spot scaling: set capacityController.enabled=true and pick adapter
+  (aws_spot / azure_spot / gcp_preemptible). See
+  examples/autoscale/spot_adapter.py for details.
+
+  Prometheus: set serviceMonitor.enabled=true if you run prometheus-operator.
+──────────────────────────────────────────────────────────────────────────────

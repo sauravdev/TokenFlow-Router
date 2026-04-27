@@ -1,0 +1,137 @@
+# TokenFlow Router — Helm values.
+# Defaults are tuned for getting started on EKS / AKS / GKE / k3s. Tweak as needed.
+
+image:
+  repository: ghcr.io/sauravdev/tokenflow-router
+  tag: latest                 # set to a pinned digest in production
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+replicaCount: 2               # the router itself is stateless; scale horizontally
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Resources ──────────────────────────────────────────────────────────────
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+# ── Networking ─────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP             # set LoadBalancer on EKS/AKS/GKE for external access
+  port: 8080
+  annotations: {}
+  # EKS NLB example:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: external
+  #   service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+  # AKS internal LB example:
+  #   service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: tokenflow.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# ── Router config ──────────────────────────────────────────────────────────
+config:
+  logLevel: INFO
+  defaultPolicy: balanced
+  enableMetrics: true
+  endpointWarmupGraceSeconds: 120
+  scrapeIntervalSeconds: 10
+  staleThresholdSeconds: 60
+
+# Routing policy — paste your policy YAML here, OR use --set-file
+# `policy.content=path/to/policy.yaml` at install time:
+#   helm install tokenflow . --set-file policy.content=/path/to/policy.yaml
+policy:
+  content: |
+    name: helm-default-balanced
+    description: Default balanced policy installed by the Helm chart
+    preset: balanced
+    slo_weight: 0.30
+    cost_weight: 0.20
+    queue_weight: 0.15
+    gpu_affinity_weight: 0.15
+    model_fit_weight: 0.10
+    reliability_weight: 0.10
+    slo_ttft_ms: 500
+    slo_itl_ms: 50
+    slo_e2e_ms: 5000
+    max_queue_depth: 100
+    rules:
+      - name: premium-traffic-on-premium-gpu
+        priority: 10
+        conditions:
+          priority_tier: premium
+        actions:
+          set_budget_sensitivity: 0.0
+
+# ── Health probes ──────────────────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+# ── Pod scheduling ────────────────────────────────────────────────────────
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# ── ServiceAccount ─────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # EKS IRSA example (so the router itself can talk to AWS APIs for spot
+  # capacity scaling — only needed if you also enable the spot adapter):
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/tokenflow-router
+
+# ── HPA ────────────────────────────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Capacity controller (dormant-backend autoscaler) ───────────────────────
+# Set enabled=true to deploy the controller as a sidecar Deployment that
+# watches /admin/profiles and starts/stops backend pods or cloud instances.
+capacityController:
+  enabled: false
+  adapter: kubernetes        # kubernetes | aws_spot | azure_spot | gcp_preemptible
+  pollIntervalSeconds: 10
+  cooldownSeconds: 30
+  # When adapter=kubernetes, the controller scales managed Deployments:
+  managedDeployments: []     # e.g. [{name: vllm-prefill, namespace: tokenflow, replicas: 1}]
+
+# ── Prometheus monitoring ──────────────────────────────────────────────────
+serviceMonitor:
+  enabled: false             # set true if you have prometheus-operator installed
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}                 # add release: prometheus or whatever your operator expects
