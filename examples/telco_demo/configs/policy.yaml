@@ -1,0 +1,115 @@
+# Telco-shape multi-workload routing policy.
+#
+# Six workloads (customer-care voice, RAG, ESG, AI-assisted migration,
+# trust/inventory, digital-twin) each carry distinct SLOs, budgets, and
+# GPU allowlists. TokenFlow respects all of these at scoring time;
+# intent-based routing sees none of it.
+
+name: telco-multi-workload
+description: Multi-tenant routing — voice, RAG, ESG batch, code migration, classification, simulation
+preset: balanced
+
+# Utility weights
+slo_weight:           0.30
+cost_weight:          0.25
+queue_weight:         0.15
+gpu_affinity_weight:  0.10
+model_fit_weight:     0.10
+reliability_weight:   0.10
+
+# SLO targets (overridden per tenant where appropriate)
+slo_ttft_ms: 500
+slo_itl_ms:  50
+slo_e2e_ms:  5000
+
+max_queue_depth: 100
+min_health_score: 0.5
+max_error_rate: 0.10
+
+# Rules — applied in priority order (lower = first)
+rules:
+  - name: premium-traffic-on-premium-gpu
+    description: "Premium tier ignores cost; serve from highest-quality lane"
+    priority: 10
+    conditions:
+      priority_tier: "premium"
+    actions:
+      set_budget_sensitivity: 0.0
+
+  - name: voice-on-premium-low-latency
+    description: "Voice / customer-care has tightest TTFT requirement"
+    priority: 12
+    conditions:
+      priority_tier: "premium"
+      latency_class: "interactive"
+    actions:
+      set_optimization_target: "latency"
+
+  - name: batch-to-economy-lane
+    description: "Batch tier (ESG, offline reports) routes to cheapest lane"
+    priority: 20
+    conditions:
+      priority_tier: "batch"
+    actions:
+      set_budget_sensitivity: 1.0
+
+  - name: large-prompt-prefer-prefill
+    description: "Long-context (>4k) gets TTFT-first routing"
+    priority: 30
+    conditions:
+      input_tokens_gt: 4000
+    actions:
+      set_latency_class: "interactive"
+
+  - name: code-and-reasoning-prefer-quality
+    description: "Migration / digital-twin tasks: prefer larger model"
+    priority: 25
+    conditions:
+      workload_type: "reasoning"
+    actions:
+      set_budget_sensitivity: 0.1
+
+# Per-tenant policies. Tenants are workload-named:
+#   - customer-care      premium-tier voice agent
+#   - rag-platform       standard RAG retrieval + final-answer
+#   - esg-reporting      batch ESG report classification
+#   - migration-tools    AI-assisted code migration
+#   - trust-inventory    network inventory event classification
+#   - digital-twin       business-simulation reasoning
+tenant_policies:
+  tenant-customer-care:
+    allowed_gpu_classes: [B200, H200, H100, A100]
+    max_rpm: 300
+    budget_usd_per_hour: 25.0
+    priority_tier_override: premium
+
+  tenant-rag-platform:
+    allowed_gpu_classes: [H200, H100, A100, L40S]
+    max_rpm: 500
+    budget_usd_per_hour: 15.0
+
+  tenant-esg-reporting:
+    # Batch / offline — cheapest lane only.
+    allowed_gpu_classes: [A100, L40S, L4, RTX_PRO_6000]
+    max_rpm: 100
+    budget_usd_per_hour: 5.0
+    priority_tier_override: batch
+    cost_weight_override: 1.0
+
+  tenant-migration-tools:
+    allowed_gpu_classes: [H200, H100, A100]
+    max_rpm: 200
+    budget_usd_per_hour: 12.0
+
+  tenant-trust-inventory:
+    # Light classification queries; doesn't need premium.
+    allowed_gpu_classes: [H100, A100, L40S, L4]
+    max_rpm: 800
+    budget_usd_per_hour: 8.0
+
+  tenant-digital-twin:
+    # Premium reasoning workload; small request volume but high quality bar.
+    allowed_gpu_classes: [B200, H200, H100, A100]
+    max_rpm: 50
+    budget_usd_per_hour: 30.0
+    priority_tier_override: premium
