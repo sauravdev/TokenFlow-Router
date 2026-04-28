@@ -563,6 +563,105 @@ that the intent baseline pinned to premium were routed to standard
 where they fit comfortably under SLO at 1/3 the cost.
 
 
+6.1. A/B: TokenFlow with vs without the NVIDIA-shape classifier
+================================================================
+
+To isolate the classifier's incremental contribution, the same fleet,
+same workload, same seed (`--seed 42`) was run with the classifier on
+and again with `TOKENFLOW_EXTERNAL_CLASSIFIER_URL` unset.
+
+| Metric            | Intent baseline | TF **without** classifier | TF **with** classifier |
+| ----------------- | --------------: | ------------------------: | ---------------------: |
+| Success           |          100.0% |                    100.0% |                 100.0% |
+| p50 latency       |        2,967 ms |                    698 ms |                 734 ms |
+| p95 latency       |       16,002 ms |                  3,489 ms |              11,077 ms |
+| p99 latency       |       16,167 ms |                  3,541 ms |              11,385 ms |
+| Mean latency      |        4,165 ms |                  1,255 ms |               2,726 ms |
+| **SLO miss rate** |           38.3% |                  **0.0%** |                   7.9% |
+| **Total cost**    |          $2.756 |                **$0.209** |                 $0.811 |
+| Cost per 1k tok   |         $0.0715 |                 $0.00481  |                $0.0188 |
+
+**On this workload + this policy, TokenFlow without the classifier
+beats TokenFlow with the classifier on every metric.** This is the
+kind of result honest A/B testing produces and is worth understanding.
+
+What happened
+-------------
+
+Endpoint distribution, all 240 requests:
+
+| Lane          | Intent | TF no classifier | TF + classifier |
+| ------------- | -----: | ---------------: | --------------: |
+| vllm-economy  |     32 |          **240** |             170 |
+| vllm-standard |    116 |                0 |              70 |
+| vllm-premium  |     92 |                0 |               0 |
+
+Without the classifier, TokenFlow's local heuristic (token shape,
+input/output length bands) plus the multi-tenant policy correctly
+landed **all 240 requests on the economy lane** — at zero SLO misses
+and ~$0.21 total cost.
+
+With the classifier, NVIDIA-shape labels like `hard_question` (mapped
+to `WorkloadType.REASONING`) and `summary_request` (`PREFILL_HEAVY`)
+fired the `code-and-reasoning-prefer-quality` policy rule, which
+lowered budget sensitivity to 0.1 for those requests. The scoring
+engine then preferred the standard (14B) lane. Because some of these
+requests are long (esg_batch: ~5,500-token prefill; ai_migration: 400-
+token outputs), the standard lane is *slower for them* than economy
+on a quiet box, and total work shifted to a more expensive lane.
+
+Per-workload latency change when the classifier was added:
+
+| Workload                    | p50 (no shim) | p50 (with shim) | Δ        |
+| --------------------------- | ------------: | --------------: | -------: |
+| ai_assisted_migration       |      2,740 ms |        8,682 ms | **+217%** |
+| digital_twin_simulation     |      3,523 ms |       11,298 ms | **+221%** |
+| esg_batch                   |      1,409 ms |        4,460 ms | **+217%** |
+| customer_care_voice         |        668 ms |          701 ms |    +5%   |
+| trust_inventory             |        237 ms |          272 ms |   +15%   |
+| rag_retrieval               |      1,738 ms |        1,740 ms |    +0%   |
+
+The three workloads with the biggest regressions (`migration`, `twin`,
+`esg`) are also the three the NVIDIA classifier *most aggressively
+re-tagged*. The other three (chat-shape: `voice`, `inventory`, `rag`)
+were classified the same way by both heuristic and shim, so their
+results are essentially unchanged.
+
+When the NVIDIA classifier *would* help
+---------------------------------------
+
+The takeaway is **not** "classifiers are bad". It's: the classifier is
+useful when its workload-type judgment is *more accurate than the
+local heuristic* AND the policy is calibrated so that more accurate
+workload tags lead to better routing outcomes. On this specific
+workload + this specific policy, neither held. The classifier
+integration is shipped as opt-in (env var) for exactly this reason —
+**measure first, then enable.**
+
+The classifier is most likely to add value in scenarios:
+
+1. **Local heuristic is genuinely wrong** — e.g., long, decoy code
+   blocks where keyword regex misses the prompt's actual intent.
+2. **Fleet has diverse model quality**, not just diverse cost — e.g.,
+   when the premium lane is a Nemotron 340B or DeepSeek R1, the
+   *quality* delta on reasoning is large enough to justify the cost.
+3. **Policy rules are calibrated for accurate workload tags** — e.g.,
+   `priority_tier_override: premium` for tenants whose work is *known*
+   reasoning-bound, paired with `set_budget_sensitivity: 0.0`.
+
+For comparison, the canonical NVIDIA Router v2 with a Qwen3-1.7B
+classifier model would have produced labels that broadly agree with
+this shim's heuristic + LLM-as-judge (NVIDIA's classifier confidence
+distribution looks similar). The architectural lesson holds whether
+the classifier is the shim or the real v2 container — and is one of
+the strongest arguments for TokenFlow's *composable* design: you can
+add a classifier, run an A/B, and turn it off in one env-var change
+without re-architecting anything.
+
+The raw data for both runs is in `results/benchmark.json` (with) and
+`results/benchmark_no_classifier.json` (without).
+
+
 7. Per-workload analysis — why TokenFlow wins on each
 ======================================================
 
