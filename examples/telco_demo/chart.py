@@ -115,9 +115,9 @@ def per_workload(data, out):
 
     for ax, intent_v, router_v, title, ylabel, fmt, ymax in [
         (axes[0], intent_cost, router_cost, "Cost per workload ↓",   "USD",
-         lambda v: f"${v:.3f}", max(max(intent_cost+router_cost+[0.001])) * 1.25),
+         lambda v: f"${v:.3f}", max(intent_cost + router_cost + [0.001]) * 1.25),
         (axes[1], intent_p95,  router_p95,  "p95 per workload ↓",    "ms",
-         lambda v: f"{v:,.0f}", max(max(intent_p95+router_p95+[1])) * 1.22),
+         lambda v: f"{v:,.0f}", max(intent_p95 + router_p95 + [1.0]) * 1.22),
         (axes[2], intent_succ, router_succ, "Success per workload ↑", "%",
          lambda v: f"{v:.0f}%", 110),
     ]:

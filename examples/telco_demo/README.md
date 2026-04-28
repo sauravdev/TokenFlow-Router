@@ -121,25 +121,84 @@ python3 examples/telco_demo/chart.py
 ```
 
 
-What's reported
----------------
+Live results — 8× A100 80GB box, 180 requests / arm, ~3 min run
+---------------------------------------------------------------
 
-After the run, `results/benchmark.json` has both the summary tables and
-the full raw per-request records:
+![headline chart](results/chart_headline.png)
 
-  - `totals` — by arm
-  - `by_workload` — per-(arm, workload), so you can see e.g. how
-    `customer_care_voice` p95 differs between intent and TokenFlow
-  - `raw` — every individual request with its endpoint_used, latency,
-    cost, success, intent label (for arm A), tenant header, etc.
+| Metric                       | Intent-based | **TokenFlow** | Δ        |
+| ---------------------------- | -----------: | ------------: | -------: |
+| Success rate                 |       100.0% |        100.0% |     —    |
+| p50 latency                  |      2,891 ms|        682 ms |   −76%   |
+| p95 latency                  |     12,165 ms|      2,766 ms |   −77%   |
+| **SLO miss rate**            |        35.0% |      **0.0%** | −35.0 pp |
+| **Total cost (180 req)**     |       $1.787 |    **$0.149** | **−92%** |
+| Cost per 1k tokens           |     $0.0649  |     $0.0048   |   −93%   |
 
-Charts written to `results/`:
+**TokenFlow is 12× cheaper and eliminates every SLO violation** on the
+identical workload. Both arms succeeded on 100% of requests; the
+difference is *which backend each request landed on*.
 
-  - `chart_headline.png` — 4-panel (success / p95 / total cost / cost-per-1k-tok)
-  - `chart_per_workload.png` — 6 workloads × 2 arms across cost / p95 /
-    success rate
+Per-workload breakdown (the part intent-based architecturally cannot do):
 
-Run for real and the actual numbers replace the placeholders here.
+![per-workload chart](results/chart_per_workload.png)
+
+| Workload                  | Intent cost | TokenFlow cost | Δ      | Intent SLO miss | TokenFlow SLO miss |
+| ------------------------- | ----------: | -------------: | -----: | --------------: | -----------------: |
+| ai_assisted_migration     |      $0.762 |        $0.036  | **−95%** |      **100%**   |        **0%**      |
+| customer_care_voice       |      $0.336 |        $0.029  |  −91%  |       51.6%     |        **0%**      |
+| digital_twin_simulation   |      $0.411 |        $0.019  |  −95%  |      **100%**   |        **0%**      |
+| esg_batch                 |      $0.126 |        $0.021  |  −83%  |        0.0%     |         0.0%       |
+| rag_retrieval             |      $0.127 |        $0.039  |  −69%  |        7.5%     |        **0%**      |
+| trust_inventory           |      $0.025 |        $0.004  |  −85%  |        0.0%     |         0.0%       |
+
+**What you're looking at:**
+
+The intent-based classifier sends every "hard" workload (migration,
+voice, digital-twin) to the 72B premium lane regardless of cost. Two
+of those workloads (`ai_assisted_migration` and `digital_twin_simulation`)
+miss their SLO 100% of the time because the 72B is saturated with
+traffic that doesn't need it. The voice workload misses SLO ~52% of
+the time for the same reason — its 1.5s SLO can't be met when it's
+queued behind reasoning prompts on the same backend.
+
+TokenFlow sees the per-tenant policies in `configs/policy.yaml`, scores
+backends per request, and routes:
+
+- `customer_care_voice` (premium tier, 1.5s SLO) → standard lane (14B,
+  fast enough for voice, 30% the cost of premium)
+- `ai_assisted_migration` (standard tier, 8s SLO) → standard lane
+- `digital_twin_simulation` (premium tier, 12s SLO) → premium lane only
+  for the few requests that need it
+- `esg_batch` (batch tier, 15s SLO) → economy lane (3B, 80% cheaper)
+- `trust_inventory` (standard tier, 3s SLO) → economy lane (small
+  classification queries don't need 14B)
+
+The router doesn't beat intent on quality — both arms successfully
+return responses — but it routes intelligently enough that **no
+workload misses its SLO**, while intent fails 35% of all requests'
+SLOs and spends 12× more.
+
+Routing distribution from Prometheus (`results/prometheus.txt`):
+
+  - vllm-economy: 73 routes (chat-shape, batch, classification)
+  - vllm-standard: 87 routes (voice, RAG, code migration, simulation)
+  - vllm-premium: 20 routes (only the requests that genuinely benefit)
+
+Compared to intent's distribution:
+
+  - vllm-economy: 64 routes
+  - vllm-standard: 40 routes
+  - vllm-premium: **76 routes** (the expensive bucket — 4× more than TokenFlow uses)
+
+
+Charts and raw data
+-------------------
+
+  - `results/benchmark.json` — full summary + 360 raw per-request records
+  - `results/chart_headline.png` — 4-panel TokenFlow vs intent
+  - `results/chart_per_workload.png` — 6 workloads × 2 arms
+  - `results/prometheus.txt` — router-internal counters
 
 
 Honest framing

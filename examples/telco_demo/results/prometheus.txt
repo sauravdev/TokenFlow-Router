@@ -1,0 +1,11 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-customer-care"} 0.0201027777777778
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-digital-twin"} 0.015493750000000011
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-esg-reporting"} 0.14640277777777777
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-migration-tools"} 0.028503472222222197
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-rag-platform"} 0.08889999999999973
+tokenflow_estimated_cost_usd_total{endpoint_name="vllm-economy",tenant_id="tenant-trust-inventory"} 0.006561111111111119
+tokenflow_route_decisions_total{endpoint_name="vllm-economy",outcome="success",priority_tier="batch",workload_type="prefill_heavy"} 83.0
+tokenflow_route_decisions_total{endpoint_name="vllm-economy",outcome="success",priority_tier="premium",workload_type="decode_heavy"} 293.0
+tokenflow_route_decisions_total{endpoint_name="vllm-economy",outcome="success",priority_tier="standard",workload_type="balanced"} 281.0
+tokenflow_route_decisions_total{endpoint_name="vllm-economy",outcome="success",priority_tier="standard",workload_type="decode_heavy"} 92.0
