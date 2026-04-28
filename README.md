@@ -13,7 +13,14 @@ If you run more than one inference stack or GPU tier, TokenFlow Router gives you
 - apply business policy (**tenant**, **priority**, **budget**, **SLO**)
 - choose the best backend for either **latency** or **throughput**
 
-In plain English: this is the layer that decides whether a request should go to **NIM on H100**, **vLLM on H200**, **SGLang on L40S**, **Dynamo**, or **Ollama** — and explains why.
+In plain English: this is the layer that decides whether a request should go to **NIM on H100**, **vLLM on H200**, **SGLang on L40S**, **Dynamo**, **Ollama**, or a **managed frontier API** (OpenAI / Anthropic / OpenRouter) — and explains why.
+
+For an end-to-end multi-tenant benchmark with **NVIDIA AI Blueprints
+LLM Router v2 wire-format compatible classifier** + a four-backend
+fleet (3 vLLM lanes + OpenAI frontier), see
+[`examples/telco_demo/`](examples/telco_demo/) — TokenFlow drops p50
+latency by 76%, eliminates 80% of SLO violations, and reduces cost
+71% versus a keyword intent baseline on identical workload.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐

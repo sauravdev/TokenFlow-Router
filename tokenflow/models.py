@@ -37,6 +37,8 @@ class GPUClass(str, Enum):
     RTX3090 = "RTX3090"         # RTX 3090 24GB — older consumer
     # CPU fallback
     CPU = "CPU"                 # CPU-only inference — batch/offline tiny models only
+    # Managed frontier APIs — no local GPU, billed per-token by the provider
+    FRONTIER_API = "FRONTIER_API"  # OpenAI / Anthropic / OpenRouter / xAI managed endpoint
     UNKNOWN = "UNKNOWN"
 
 

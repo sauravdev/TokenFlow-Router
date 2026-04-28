@@ -78,18 +78,21 @@ rules:
 #   - digital-twin       business-simulation reasoning
 tenant_policies:
   tenant-customer-care:
+    tenant_id: tenant-customer-care
     allowed_gpu_classes: [B200, H200, H100, A100]
     max_rpm: 300
     budget_usd_per_hour: 25.0
     priority_tier_override: premium
 
   tenant-rag-platform:
+    tenant_id: tenant-rag-platform
     allowed_gpu_classes: [H200, H100, A100, L40S]
     max_rpm: 500
     budget_usd_per_hour: 15.0
 
   tenant-esg-reporting:
     # Batch / offline — cheapest lane only.
+    tenant_id: tenant-esg-reporting
     allowed_gpu_classes: [A100, L40S, L4, RTX_PRO_6000]
     max_rpm: 100
     budget_usd_per_hour: 5.0
@@ -97,19 +100,33 @@ tenant_policies:
     cost_weight_override: 1.0
 
   tenant-migration-tools:
+    tenant_id: tenant-migration-tools
     allowed_gpu_classes: [H200, H100, A100]
     max_rpm: 200
     budget_usd_per_hour: 12.0
 
   tenant-trust-inventory:
     # Light classification queries; doesn't need premium.
+    tenant_id: tenant-trust-inventory
     allowed_gpu_classes: [H100, A100, L40S, L4]
     max_rpm: 800
     budget_usd_per_hour: 8.0
 
   tenant-digital-twin:
     # Premium reasoning workload; small request volume but high quality bar.
+    tenant_id: tenant-digital-twin
     allowed_gpu_classes: [B200, H200, H100, A100]
     max_rpm: 50
     budget_usd_per_hour: 30.0
     priority_tier_override: premium
+
+  # Non-prod / staging — runs the same workload mix but on cheap lane only,
+  # with a hard error-rate cap. Used for canary deploys and shadow traffic.
+  tenant-nonprod:
+    tenant_id: tenant-nonprod
+    allowed_gpu_classes: [A100, L40S, L4, RTX_PRO_6000]
+    max_rpm: 50
+    budget_usd_per_hour: 1.0
+    priority_tier_override: batch
+    cost_weight_override: 1.0
+    max_error_rate_override: 0.02

@@ -88,22 +88,24 @@ class ExternalClassifierClient:
     """
 
     # Map of common classifier-output labels → TokenFlow's WorkloadType enum
-    # values. If your classifier emits something different, add a row here.
+    # values. TokenFlow's WorkloadType has 4 canonical values:
+    # PREFILL_HEAVY, DECODE_HEAVY, BALANCED, REASONING. NVIDIA v2 emits a
+    # broader label set (chit_chat / hard_question / summary_request /
+    # creative_writing / image_understanding / code_generation / math) — we
+    # collapse those down. If your classifier emits something else, add a
+    # row here.
     _INTENT_MAP = {
-        # NVIDIA v2 router intent labels (intent_router prompt)
+        # NVIDIA v2 router intent labels
         "hard_question":         "reasoning",
-        "chit_chat":             "chat",
-        "chitchat":              "chat",
-        "creative_writing":      "generation",
-        "image_understanding":   "balanced",       # multimodal — TokenFlow doesn't route on image content
-        "summary_request":       "summarization",
-        "code_generation":       "generation",
         "math":                  "reasoning",
+        "code_generation":       "reasoning",
+        "summary_request":       "prefill_heavy",   # long input, short output
+        "creative_writing":      "decode_heavy",    # short prompt, long output
+        "chit_chat":             "decode_heavy",    # short input, short-to-medium output
+        "chitchat":              "decode_heavy",
+        "image_understanding":   "balanced",        # multimodal — collapse
         # canonical TokenFlow values pass through
         "reasoning":             "reasoning",
-        "chat":                  "chat",
-        "summarization":         "summarization",
-        "generation":            "generation",
         "decode_heavy":          "decode_heavy",
         "prefill_heavy":         "prefill_heavy",
         "balanced":              "balanced",
