@@ -60,10 +60,16 @@ LLM-as-judge calls and 59 cases where the judge overrode the heuristic
 (~25%). Zero classifier errors.
 
 **TokenFlow with the NVIDIA-shape classifier is 4× faster on p50
-latency, eliminates 80% of SLO violations, and costs ~3.5× less** on
-the identical workload. Both arms successfully returned a response on
-every request — the difference is **which backend each request landed
-on**.
+latency, eliminates 80% of SLO violations, and costs ~3.5× less** than
+the intent baseline. Both arms successfully returned a response on
+every request.
+
+> **Important caveat:** see [§6.1](#61-ab-tokenflow-with-vs-without-the-nvidia-shape-classifier)
+> for the full A/B with the classifier ON vs OFF. The classifier
+> *trades* p95 latency, SLO miss rate, and cost for **answer quality**
+> on hard reasoning prompts (+11.8% avg, +32% on math/reasoning, judged
+> by GPT-4o-mini). Whether that trade is right for your workload is a
+> per-tenant decision the policy DSL lets you make selectively.
 
 ![headline chart](results/chart_headline.png)
 
@@ -627,39 +633,87 @@ re-tagged*. The other three (chat-shape: `voice`, `inventory`, `rag`)
 were classified the same way by both heuristic and shim, so their
 results are essentially unchanged.
 
-When the NVIDIA classifier *would* help
----------------------------------------
+But latency is not the only axis — **answer quality**
+------------------------------------------------------
 
-The takeaway is **not** "classifiers are bad". It's: the classifier is
-useful when its workload-type judgment is *more accurate than the
-local heuristic* AND the policy is calibrated so that more accurate
-workload tags lead to better routing outcomes. On this specific
-workload + this specific policy, neither held. The classifier
-integration is shipped as opt-in (env var) for exactly this reason —
-**measure first, then enable.**
+The benchmark above measures latency, SLO miss, and cost. It does
+**not** measure whether the response was *correct*. Both arms return
+HTTP 200; whether a 3B model gives a worse answer than a 14B model on
+a hard reasoning prompt is invisible to the harness.
 
-The classifier is most likely to add value in scenarios:
+A separate eval harness (`quality_eval.py`) sends the five hardest
+prompts in the workload mix through TokenFlow with the classifier ON
+and OFF, captures the actual response text for each, and asks
+GPT-4o-mini to score the two answers per prompt across four
+dimensions (correctness, completeness, reasoning, usefulness — each
+1-10, total /40).
 
-1. **Local heuristic is genuinely wrong** — e.g., long, decoy code
-   blocks where keyword regex misses the prompt's actual intent.
-2. **Fleet has diverse model quality**, not just diverse cost — e.g.,
-   when the premium lane is a Nemotron 340B or DeepSeek R1, the
-   *quality* delta on reasoning is large enough to justify the cost.
-3. **Policy rules are calibrated for accurate workload tags** — e.g.,
-   `priority_tier_override: premium` for tenants whose work is *known*
-   reasoning-bound, paired with `set_budget_sensitivity: 0.0`.
+Results from the live run (raw data: `results/responses_*.json` and
+`results/judgments.json`):
 
-For comparison, the canonical NVIDIA Router v2 with a Qwen3-1.7B
-classifier model would have produced labels that broadly agree with
-this shim's heuristic + LLM-as-judge (NVIDIA's classifier confidence
-distribution looks similar). The architectural lesson holds whether
-the classifier is the shim or the real v2 container — and is one of
-the strongest arguments for TokenFlow's *composable* design: you can
-add a classifier, run an A/B, and turn it off in one env-var change
-without re-architecting anything.
+| Prompt                    | Routed to (no shim) | Routed to (with shim) | Score (no shim) | Score (with shim) | Winner          |
+| ------------------------- | ------------------- | --------------------- | --------------: | ----------------: | --------------- |
+| migration_cobol           | vllm-economy (3B)   | vllm-standard (14B)   |    **40 / 40**  |              36   | no shim         |
+| twin_availability         | vllm-economy (3B)   | vllm-standard (14B)   |             25  |     **33 / 40**   | with shim       |
+| twin_capacity             | vllm-economy (3B)   | vllm-standard (14B)   |             25  |     **33 / 40**   | with shim       |
+| esg_extract               | vllm-economy (3B)   | vllm-standard (14B)   |             34  |             34    | tie (judge: a)  |
+| migration_kotlin          | vllm-economy (3B)   | vllm-standard (14B)   |             28  |     **34 / 40**   | with shim       |
+| **average**               |                     |                       |       **30.4**  |        **34.0**   | with shim **+11.8%** |
 
-The raw data for both runs is in `results/benchmark.json` (with) and
-`results/benchmark_no_classifier.json` (without).
+**The classifier is doing exactly what it should.** It correctly tags
+the multi-step quantitative reasoning prompts (`twin_availability`,
+`twin_capacity`) and the complex Kotlin-Flow refactor as
+`hard_question`, lifts them to the 14B lane, and the 14B produces
+demonstrably better answers — bigger model handles the math/reasoning
+correctly where the 3B drops steps or makes arithmetic mistakes.
+
+Where the 3B happened to win (`migration_cobol`, `esg_extract`),
+either the prompt was actually within the 3B's competence (a clean
+structural translation, an extraction task) and the classifier's
+"upgrade to 14B" didn't add quality — only cost.
+
+The full picture
+----------------
+
+Putting all five dimensions side-by-side:
+
+| Dimension                      | TF without classifier | TF with classifier | Winner          |
+| ------------------------------ | --------------------: | -----------------: | --------------- |
+| p50 latency                    |                698 ms |             734 ms | no shim (-5%)   |
+| p95 latency                    |              3,489 ms |          11,077 ms | **no shim (3.2× faster)** |
+| SLO miss rate                  |                  0.0% |               7.9% | **no shim**     |
+| Cost ($, n=240)                |                $0.209 |             $0.811 | **no shim (3.9× cheaper)** |
+| **Answer quality** (avg /40)   |                  30.4 |               34.0 | **with shim (+11.8%)** |
+| Quality on math/reasoning      |              25 / 40  |          33 / 40   | **with shim (+32%)** |
+
+This is the real tradeoff. **The classifier improves correctness on
+prompts where the 3B genuinely can't keep up, at the cost of latency,
+SLO, and cost.** Whether that's the right call is a *workload
+decision*, not an architectural one:
+
+- **Run the classifier ON** when answer quality is load-bearing —
+  reasoning-heavy traffic, code/math, multi-step analysis where a
+  wrong answer is costly. The 12% quality improvement and 32% on
+  reasoning-specific prompts is meaningful for those workloads.
+- **Run it OFF** when the cheap-lane model is "good enough" for your
+  prompts — chat, classification, simple summarization, RAG re-rank.
+  The 3.9× cost and 3.2× p95-latency savings are real money.
+- **Use TokenFlow's policy DSL to do both** — keep the classifier ON,
+  but only let "premium-quality" tenants pay the cost. e.g., set
+  `tenant-digital-twin.priority_tier_override: premium` while leaving
+  `tenant-rag-platform` on the cost-aware path. The classifier becomes
+  a quality-bias signal the policy can selectively respect.
+
+For the canonical NVIDIA Router v2 (Qwen3-1.7B classifier model
+instead of this shim), the per-label routing recommendations would be
+broadly the same — what changes is the integration shape, not the
+quality calculus. TokenFlow's composable design means you measure on
+your own workload, then turn the dial.
+
+The raw data: `results/benchmark.json` (latency/cost run, classifier
+on), `results/benchmark_no_classifier.json` (latency/cost run,
+classifier off), `results/responses_*.json` (per-prompt response text
+for both arms), `results/judgments.json` (GPT-4o-mini verdicts).
 
 
 7. Per-workload analysis — why TokenFlow wins on each

@@ -1,0 +1,128 @@
+{
+  "arm_a": "tf_no_classifier",
+  "arm_b": "tf_with_classifier",
+  "judgments": [
+    {
+      "a": {
+        "correctness": 10,
+        "completeness": 10,
+        "reasoning": 10,
+        "usefulness": 10
+      },
+      "b": {
+        "correctness": 9,
+        "completeness": 9,
+        "reasoning": 9,
+        "usefulness": 9
+      },
+      "winner": "a",
+      "verdict": "Answer A is better because it provides a more detailed explanation of the implementation and explicitly addresses the byte alignment and trailing-space semantics.",
+      "prompt_id": "migration_cobol",
+      "a_arm": "tf_no_classifier",
+      "b_arm": "tf_with_classifier",
+      "a_endpoint": "vllm-economy",
+      "b_endpoint": "vllm-standard",
+      "a_latency_ms": 3297.13609999817,
+      "b_latency_ms": 8910.085023999272
+    },
+    {
+      "a": {
+        "correctness": 7,
+        "completeness": 6,
+        "reasoning": 6,
+        "usefulness": 6
+      },
+      "b": {
+        "correctness": 9,
+        "completeness": 8,
+        "reasoning": 8,
+        "usefulness": 8
+      },
+      "winner": "b",
+      "verdict": "Answer B is better because it provides a more accurate and complete derivation of the service availability, including the necessary calculations and considerations for redundancy and failure rates.",
+      "prompt_id": "twin_availability",
+      "a_arm": "tf_no_classifier",
+      "b_arm": "tf_with_classifier",
+      "a_endpoint": "vllm-economy",
+      "b_endpoint": "vllm-standard",
+      "a_latency_ms": 3739.225217999774,
+      "b_latency_ms": 11633.650478001073
+    },
+    {
+      "a": {
+        "correctness": 7,
+        "completeness": 6,
+        "reasoning": 6,
+        "usefulness": 6
+      },
+      "b": {
+        "correctness": 9,
+        "completeness": 8,
+        "reasoning": 8,
+        "usefulness": 8
+      },
+      "winner": "b",
+      "verdict": "Answer B is better because it correctly calculates the number of replicas needed for peak load and accounts for the 1-zone outage more comprehensively.",
+      "prompt_id": "twin_capacity",
+      "a_arm": "tf_no_classifier",
+      "b_arm": "tf_with_classifier",
+      "a_endpoint": "vllm-economy",
+      "b_endpoint": "vllm-standard",
+      "a_latency_ms": 3737.6475210003264,
+      "b_latency_ms": 11651.720877998741
+    },
+    {
+      "a": {
+        "correctness": 9,
+        "completeness": 9,
+        "reasoning": 8,
+        "usefulness": 8
+      },
+      "b": {
+        "correctness": 8,
+        "completeness": 8,
+        "reasoning": 9,
+        "usefulness": 9
+      },
+      "winner": "a",
+      "verdict": "Answer A is better because it provides a clearer ranking of risks based on financial impact and directly cites relevant figures from the report.",
+      "prompt_id": "esg_extract",
+      "a_arm": "tf_no_classifier",
+      "b_arm": "tf_with_classifier",
+      "a_endpoint": "vllm-economy",
+      "b_endpoint": "vllm-standard",
+      "a_latency_ms": 3157.632858998113,
+      "b_latency_ms": 7722.105133001605
+    },
+    {
+      "a": {
+        "correctness": 7,
+        "completeness": 8,
+        "reasoning": 7,
+        "usefulness": 6
+      },
+      "b": {
+        "correctness": 9,
+        "completeness": 9,
+        "reasoning": 8,
+        "usefulness": 8
+      },
+      "winner": "b",
+      "verdict": "Answer B is better because it provides a more accurate and complete implementation of the Kotlin Flow while effectively explaining the differences in back-pressure and concurrency.",
+      "prompt_id": "migration_kotlin",
+      "a_arm": "tf_no_classifier",
+      "b_arm": "tf_with_classifier",
+      "a_endpoint": "vllm-economy",
+      "b_endpoint": "vllm-standard",
+      "a_latency_ms": 3733.2750409987057,
+      "b_latency_ms": 11627.351201997953
+    }
+  ],
+  "summary": {
+    "a_wins": 2,
+    "b_wins": 3,
+    "ties": 0,
+    "a_avg_score": 30.4,
+    "b_avg_score": 34
+  }
+}
