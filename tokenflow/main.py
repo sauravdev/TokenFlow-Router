@@ -110,6 +110,28 @@ async def lifespan(app: FastAPI):
     app.state.proxy = proxy
     app.state.profile_manager = profile_manager
 
+    # Optional: external classifier (e.g., NVIDIA AI Blueprints LLM Router v2).
+    # When TOKENFLOW_EXTERNAL_CLASSIFIER_URL is set, the gateway will call
+    # this service per request and fold the returned intent into the
+    # request profile before scoring. Failure is graceful — the local
+    # heuristic kicks in if the classifier times out, errors, or returns
+    # an intent we don't recognise.
+    app.state.external_classifier = None
+    classifier_url = getattr(settings, "external_classifier_url", "") or ""
+    if classifier_url:
+        from tokenflow.integrations.external_classifier import (
+            ExternalClassifierClient,
+        )
+        app.state.external_classifier = ExternalClassifierClient(
+            classifier_url=classifier_url,
+            timeout_s=getattr(settings, "external_classifier_timeout_s", 0.5),
+        )
+        logger.info(
+            "external_classifier_enabled",
+            url=classifier_url,
+            timeout_s=getattr(settings, "external_classifier_timeout_s", 0.5),
+        )
+
     logger.info("tokenflow_ready")
     yield
 
@@ -118,6 +140,8 @@ async def lifespan(app: FastAPI):
     profile_reaper_task.cancel()
     await telemetry_collector.stop()
     await proxy.close()
+    if app.state.external_classifier is not None:
+        await app.state.external_classifier.close()
     logger.info("tokenflow_stopped")
 
 

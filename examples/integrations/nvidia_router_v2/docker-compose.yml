@@ -1,0 +1,79 @@
+# Composition example: TokenFlow Router + NVIDIA AI Blueprints LLM Router (v2).
+#
+# This compose file brings up:
+#   1. NVIDIA's classifier service (mocked here — replace `image:` with the
+#      real nat_sfc_router image once you've built it from
+#      https://github.com/NVIDIA-AI-Blueprints/llm-router)
+#   2. TokenFlow Router with TOKENFLOW_EXTERNAL_CLASSIFIER_URL pointing at
+#      the NVIDIA service
+#   3. Two vLLM backends for actual inference
+
+version: "3.9"
+
+services:
+  nvidia-router-v2:
+    # Replace with the image you build from
+    # NVIDIA-AI-Blueprints/llm-router (intent profile)
+    image: ghcr.io/your-org/nat-sfc-router:intent
+    ports:
+      - "5000:5000"
+    environment:
+      - NIM_API_KEY=${NIM_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  tokenflow:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    depends_on:
+      nvidia-router-v2:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - TOKENFLOW_HOST=0.0.0.0
+      - TOKENFLOW_PORT=8080
+      - TOKENFLOW_LOG_LEVEL=INFO
+      - TOKENFLOW_DEFAULT_POLICY=balanced
+      # External classifier — TokenFlow calls NVIDIA's router for the
+      # intent label, then folds it into the request profile before scoring.
+      - TOKENFLOW_EXTERNAL_CLASSIFIER_URL=http://nvidia-router-v2:5000
+      - TOKENFLOW_EXTERNAL_CLASSIFIER_TIMEOUT_S=0.5
+    volumes:
+      - ../../configs:/app/configs:ro
+
+  vllm-fast:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8001:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model Qwen/Qwen2.5-3B-Instruct
+      --max-model-len 4096
+      --served-model-name qwen Qwen/Qwen2.5-3B-Instruct
+
+  vllm-quality:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8002:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct
+      --max-model-len 32768
+      --served-model-name qwen Qwen/Qwen2.5-7B-Instruct

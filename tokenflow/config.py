@@ -31,6 +31,16 @@ class Settings(BaseSettings):
     # period while a newly-started container boots its serving process.
     endpoint_warmup_grace_s: int = 120
 
+    # Optional upstream classifier (e.g. NVIDIA AI Blueprints LLM Router
+    # v2 in `intent` profile, or any HTTP service speaking
+    # POST /recommendation with messages + metadata → {intent, ...}).
+    # When set, every routed request gets classified by this service
+    # first; the canonical intent label is folded into the request
+    # profile's workload_type before scoring.
+    # Empty / unset = use the local keyword-based heuristic only.
+    external_classifier_url: str = ""
+    external_classifier_timeout_s: float = 0.5
+
     # Policy
     policy_file: str | None = None
 

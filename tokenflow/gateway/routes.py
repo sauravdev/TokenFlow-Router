@@ -89,6 +89,37 @@ async def chat_completions(
         current_tenant_rpm=current_rpm,
     )
 
+    # Optional: refine workload_type via an external classifier (e.g.
+    # NVIDIA AI Blueprints LLM Router v2 in intent profile, or your own
+    # distilBERT / LLM-as-judge service). Non-blocking on failure — the
+    # local heuristic remains in place if the call errors or times out.
+    external_classifier = getattr(state, "external_classifier", None)
+    if external_classifier is not None:
+        try:
+            ext = await external_classifier.classify(
+                messages=body.get("messages", []),
+                model=profile.model_requested,
+                metadata={
+                    "tenant_id": x_tenant_id,
+                    "priority_tier": getattr(priority, "value", str(priority)),
+                },
+            )
+            if ext.intent:
+                from tokenflow.models import WorkloadType
+                try:
+                    profile.workload_type = WorkloadType(ext.intent)
+                    logger.debug(
+                        "workload_type_refined_by_external_classifier",
+                        request_id=profile.request_id,
+                        intent=ext.intent,
+                        confidence=ext.confidence,
+                        latency_ms=round(ext.latency_ms, 1),
+                    )
+                except ValueError:
+                    pass
+        except Exception as exc:
+            logger.debug("external_classifier_skipped", error=str(exc))
+
     # Apply policy
     profile, policy_actions = await state.policy_engine.apply(profile)
     if policy_actions:
